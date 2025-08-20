@@ -25,6 +25,7 @@ build/
 .env.local
 .env.*.local
 
+
 # ────── Database Files ────────────────────
 *.sqlite
 *.sqlite3
@@ -55,5 +56,7 @@ coverage/
 *.lock-wscript
 /.yarn-integrity
 /.pnp.*
+
+.config/config.js
 
 
