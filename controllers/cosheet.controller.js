@@ -25,7 +25,12 @@ const createCoSheet = async (req, res) => {
             callResponse: data.connect?.callResponse ?? data.callResponse ?? null,
             internshipType: data.connect?.internshipType ?? data.internshipType ?? null,
             detailedResponse: data.connect?.detailedResponse ?? data.detailedResponse ?? null,
+            userId: data.userId ?? null, // <-- add userId here
           };
+
+          if (!payload.userId) {
+            return { success: false, error: "userId is required" };
+          }
 
           const record = await model.CoSheet.create(payload);
           return { success: true, data: record };
