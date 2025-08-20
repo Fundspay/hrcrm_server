@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/auth.middleware");
+
 
 // Example Route Imports
 // const exampleRouter = require("./example.route");
