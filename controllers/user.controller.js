@@ -178,7 +178,7 @@ const loginWithEmailPassword = async (req, res) => {
             name: user.name,
             email: user.email,
             phoneNumber: user.phoneNumber,
-            photoUrl: user.photoUrl || null
+            
         };
 
         const token = jwt.sign(payload, CONFIG.jwtSecret, { expiresIn: "365d" });
@@ -188,7 +188,6 @@ const loginWithEmailPassword = async (req, res) => {
             name: user.name,
             email: user.email,
             phoneNumber: user.phoneNumber,
-            photoUrl: user.photoUrl || null,
             isFirstLogin,
             token
         }, 200);
