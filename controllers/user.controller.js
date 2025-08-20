@@ -7,7 +7,7 @@ const { sendMail } = require("../middleware/mailer.middleware");
 // ✅ Add User
 var addUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, phoneNumber, password, gender, type } = req.body;
+        const { firstName, lastName, email, phoneNumber, password, gender, type, position } = req.body;
 
         // Basic validation
         if (!firstName || !lastName || !email || !password || !type) {
@@ -18,6 +18,22 @@ var addUser = async (req, res) => {
         const userType = await model.UserType.findByPk(type);
         if (!userType) return ReE(res, "Invalid user type", 400);
 
+        // Validate Position (if provided)
+        let userPosition = null;
+        if (position) {
+            const pos = await model.Position.findByPk(position);
+            if (!pos) return ReE(res, "Invalid position ID", 400);
+            userPosition = pos.id;
+        }
+
+        // Validate Gender (if provided)
+        let userGender = null;
+        if (gender) {
+            const gen = await model.Gender.findByPk(gender);
+            if (!gen) return ReE(res, "Invalid gender ID", 400);
+            userGender = gen.id;
+        }
+
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -27,9 +43,10 @@ var addUser = async (req, res) => {
             lastName,
             email,
             phoneNumber,
-            gender: gender || null,
-            type: userType.id,
             password: hashedPassword,
+            type: userType.id,
+            gender: userGender,
+            position: userPosition
         });
 
         // Send welcome email
@@ -64,6 +81,7 @@ var addUser = async (req, res) => {
     }
 };
 module.exports.addUser = addUser;
+
 
 // ✅ Fetch All Users
 var fetchAllUsers = async (req, res) => {
