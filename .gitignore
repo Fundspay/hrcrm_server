@@ -24,6 +24,7 @@ build/
 .env
 .env.local
 .env.*.local
+.config/config.js
 
 
 # ────── Database Files ────────────────────
