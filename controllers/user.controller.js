@@ -178,7 +178,7 @@ const loginWithEmailPassword = async (req, res) => {
             name: user.name,
             email: user.email,
             phoneNumber: user.phoneNumber,
-            
+            photoUrl: user.photoUrl || null
         };
 
         
@@ -188,6 +188,7 @@ const loginWithEmailPassword = async (req, res) => {
             name: user.name,
             email: user.email,
             phoneNumber: user.phoneNumber,
+            photoUrl: user.photoUrl || null,
             isFirstLogin,
           
         }, 200);

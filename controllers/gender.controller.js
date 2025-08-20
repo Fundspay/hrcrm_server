@@ -2,13 +2,16 @@
 const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 
-// ✅ Add a new Gender
-var add = async function (req, res) {
-    let { name } = req.body;
-    if (!name) return ReE(res, "Gender name is required", 400);
-
+// ✅ Add Gender
+var add = async (req, res) => {
     try {
-        const gender = await model.Gender.create({ name });
+        const { name, user } = req.body;
+        if (!name || !user) return ReE(res, "Missing required fields", 400);
+
+        if (!(await model.User.findByPk(user))) return ReE(res, "Invalid user ID", 400);
+
+        const gender = await model.Gender.create({ name, user });
+
         return ReS(res, gender, 201);
     } catch (error) {
         return ReE(res, error.message, 422);
@@ -16,12 +19,11 @@ var add = async function (req, res) {
 };
 module.exports.add = add;
 
-// ✅ Fetch all Genders (active only, excluding soft-deleted)
-var fetchAll = async function (req, res) {
+// ✅ Fetch all Genders
+var fetchAll = async (req, res) => {
     try {
-        const genders = await model.Gender.findAll({
-            where: { isDeleted: false }
-        });
+        const genders = await model.Gender.findAll({});
+        // return ReS(res, genders, 200);
         return ReS(res, { success: true, data: genders }, 200);
     } catch (error) {
         return ReE(res, error.message, 500);
@@ -29,29 +31,42 @@ var fetchAll = async function (req, res) {
 };
 module.exports.fetchAll = fetchAll;
 
-// ✅ Fetch a single Gender by ID
-var fetchSingle = async function (req, res) {
+// ✅ Fetch a single Gender
+var fetchSingle = async (req, res) => {
     try {
-        const { id } = req.params;
-        if (!id) return ReE(res, "ID is required", 400);
+        const gender = await model.Gender.findByPk(req.params.id, {
+            include: [{ model: model.User, attributes: { exclude: ['password', 'createdAt', 'updatedAt'] } }],
+            raw: false,
+            nest: true
+        });
 
-        const gender = await model.Gender.findByPk(id);
-        if (!gender) return ReE(res, "Gender not found", 404);
+        if (!gender || gender.isDeleted) {
+            return ReE(res, "Gender not found", 404);
+        }
 
-        return ReS(res, gender, 200);
+        return ReS(res, gender.toJSON(), 200);
     } catch (error) {
+        console.error("Fetch Single Gender Error:", error);
         return ReE(res, error.message, 500);
     }
 };
 module.exports.fetchSingle = fetchSingle;
 
-// ✅ Update a Gender
-var updateGender = async function (req, res) {
+// ✅ Update Gender
+var updateGender = async (req, res) => {
     try {
         const gender = await model.Gender.findByPk(req.params.id);
-        if (!gender) return ReE(res, "Gender not found", 404);
+        if (!gender || gender.isDeleted) return ReE(res, "Gender not found", 404);
 
-        await gender.update({ name: req.body.name || gender.name });
+        const { name, user } = req.body;
+
+        if (user && !(await model.User.findByPk(user))) return ReE(res, "Invalid user ID", 400);
+
+        await gender.update({
+            name: name || gender.name,
+            user: user || gender.user
+        });
+
         return ReS(res, gender, 200);
     } catch (error) {
         return ReE(res, error.message, 500);
@@ -59,16 +74,42 @@ var updateGender = async function (req, res) {
 };
 module.exports.updateGender = updateGender;
 
-// ✅ Soft delete a Gender
-var deleteGender = async function (req, res) {
+// ✅ Soft Delete Gender
+var deleteGender = async (req, res) => {
     try {
         const gender = await model.Gender.findByPk(req.params.id);
         if (!gender) return ReE(res, "Gender not found", 404);
 
         await gender.update({ isDeleted: true });
-        return ReS(res, { message: "Gender deleted successfully" }, 200);
+        return ReS(res, "Gender deleted successfully", 200);
     } catch (error) {
         return ReE(res, error.message, 500);
     }
 };
 module.exports.deleteGender = deleteGender;
+
+// 📩 POSTMAN REQUEST BODIES
+/*
+
+🔹 Add Gender (POST /genders)
+{
+    "name": "Male",
+    "user": 1
+}
+
+🔹 Fetch All Genders (GET /genders)
+No body required
+
+🔹 Fetch Single Gender (GET /genders/:id)
+No body required
+
+🔹 Update Gender (PUT /genders/:id)
+{
+    "name": "Female",
+    "user": 2
+}
+
+🔹 Delete Gender (DELETE /genders/:id)
+No body required
+
+*/
