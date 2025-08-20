@@ -6,7 +6,7 @@ let CONFIG = {};
 
 // General
 CONFIG.app = process.env.APP || "dev";
-CONFIG.port = process.env.PORT || 3000;
+CONFIG.port = process.env.PORT || 3001;
 
 // Database
 CONFIG.db_dialect   = process.env.DB_DIALECT || "postgres";
