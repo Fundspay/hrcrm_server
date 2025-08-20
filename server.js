@@ -1,3 +1,5 @@
+require("dotenv").config(); 
+
 const express         = require("express");
 const cors            = require("cors");
 const compression     = require("compression");
@@ -11,7 +13,7 @@ const logger          = require("./utils/logger.service");
 const app = express();
 
 // ────── GLOBAL MIDDLEWARE ────────────────────────────────────────────
-app.disable("x-powered-by"); 
+app.disable("x-powered-by");
 
 // Body parsing
 app.use(express.json({ limit: "50mb" }));
@@ -27,7 +29,6 @@ app.use(cors({
   allowedHeaders: "*",
   optionsSuccessStatus: 204
 }));
-app.options("*", cors());
 
 // ────── LOGGING (before routes) ──────────────────────────────────────
 app.use(
@@ -77,8 +78,9 @@ model.sequelize
   });
 
 // ────── START SERVER ────────────────────────────────────────────────
-app.listen(CONFIG.port, () =>
-  logger.info(`express: Listening on port ${CONFIG.port}`)
+const PORT = CONFIG.port || 3000;
+app.listen(PORT, () =>
+  logger.info(`express: Listening on port ${PORT}`)
 );
 
 module.exports = app;
