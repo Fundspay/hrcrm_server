@@ -16,8 +16,8 @@ router.get("/health", (req, res) => {
 
 // Add your route imports and `router.use()` registrations below
 // router.use("/example", exampleRouter);
-router.use("/users", userRouter);
-router.use("/genders", genderRouter);
-router.use("/usertypes", usertypeRouter);
+router.use("/user", userRouter);
+router.use("/gender", genderRouter);
+router.use("/usertype", usertypeRouter);
 
 module.exports = router;
