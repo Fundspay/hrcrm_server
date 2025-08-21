@@ -1,18 +1,17 @@
-require("dotenv").config(); 
+require("dotenv").config();
 
-const express         = require("express");
-const cors            = require("cors");
-const compression     = require("compression");
-const expressWinston  = require("express-winston");
-
-const model           = require("./models/index");
-const CONFIG          = require("./config/config");
-const v1              = require("./routes/v1");
-const logger          = require("./utils/logger.service");
+const express = require("express");
+const cors = require("cors");
+const compression = require("compression");
+const expressWinston = require("express-winston");
+const model = require("./models/index");
+const CONFIG = require("./config/config");
+const v1 = require("./routes/v1");
+const logger = require("./utils/logger.service");
 
 const app = express();
 
-// ────── GLOBAL MIDDLEWARE ────────────────────────────────────────────
+// ────── GLOBAL MIDDLEWARE ───────────────────────────────
 app.disable("x-powered-by");
 
 // Body parsing
@@ -23,15 +22,20 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(compression());
 
 // CORS
-app.use(cors({
-  origin: ["http://localhost:8080", "https://fundsaudit.com","http://fundsaudit.com","localhost:8080"], // allow localhost and your domain
-  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: "*",
-  optionsSuccessStatus: 204
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:8080",
+      "https://fundsaudit.com",
+      "http://fundsaudit.com"
+    ],
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: "*",
+    optionsSuccessStatus: 204
+  })
+);
 
-
-// ────── LOGGING (before routes) ──────────────────────────────────────
+// ────── LOGGING (before routes) ─────────────────────────
 app.use(
   expressWinston.logger({
     winstonInstance: logger,
@@ -40,10 +44,10 @@ app.use(
   })
 );
 
-// ────── API ROUTES ───────────────────────────────────────────────────
-app.use("/api/v1", v1);
+// ────── API ROUTES ─────────────────────────────────────
+app.use("/api/v1", v1); // only use path, not full URL
 
-// ────── HEALTH CHECK ─────────────────────────────────────────────────
+// ────── HEALTH CHECK ───────────────────────────────────
 app.get("/api/healthz", async (req, res) => {
   try {
     const result = await model.sequelize.query("SELECT 1+1 AS result", {
@@ -59,7 +63,7 @@ app.get("/api/healthz", async (req, res) => {
   }
 });
 
-// ────── ERROR LOGGER ─────────────────────────────────────────────────
+// ────── ERROR LOGGER ────────────────────────────────────
 app.use(
   expressWinston.errorLogger({
     winstonInstance: logger,
@@ -67,7 +71,7 @@ app.use(
   })
 );
 
-// ────── DATABASE SYNC ────────────────────────────────────────────────
+// ────── DATABASE SYNC ───────────────────────────────────
 model.sequelize
   .authenticate()
   .then(() => logger.info("sequelize: Database Connection Success"))
@@ -78,7 +82,7 @@ model.sequelize
     process.exit(1); // Exit on fatal DB error
   });
 
-// ────── START SERVER ────────────────────────────────────────────────
+// ────── START SERVER ───────────────────────────────────
 const PORT = CONFIG.port || 3000;
 app.listen(PORT, () =>
   logger.info(`express: Listening on port ${PORT}`)
