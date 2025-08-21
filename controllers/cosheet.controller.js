@@ -47,6 +47,10 @@ const createCoSheet = async (req, res) => {
             connectedBy: data.connect?.connectedBy ?? data.connectedBy ?? null,
           };
 
+          if (!payload.userId) {
+            return { success: false, error: "userId is required" };
+          }
+
           const record = await model.CoSheet.create(payload);
           return { success: true, data: record };
         } catch (err) {
