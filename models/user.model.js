@@ -12,7 +12,6 @@ module.exports = (sequelize, Sequelize) => {
             positionModel: { type: Sequelize.BIGINT, allowNull: true },
             password: { type: Sequelize.STRING, allowNull: false },
             photoUrl: { type: Sequelize.STRING, allowNull: true },
-            MyTarget: { type: Sequelize.BIGINT, allowNull: true },
             type: { type: Sequelize.BIGINT, allowNull: true }, // user type
             lastLoginAt: { type: Sequelize.DATE, allowNull: true },
             lastLogoutAt: { type: Sequelize.DATE, allowNull: true },
