@@ -11,5 +11,6 @@ router.delete("/delete/:id", userController.deleteUser); // Soft delete user
 
 // ✅ Auth
 router.post("/login", userController.loginWithEmailPassword); // Login with email & password
+router.post("/logout", userController.logoutUser); // Logout user
 
 module.exports = router;
