@@ -21,6 +21,14 @@ module.exports = (sequelize, Sequelize) => {
             callResponse: { type: Sequelize.STRING, allowNull: true },
             internshipType: { type: Sequelize.STRING, allowNull: true },
             detailedResponse: { type: Sequelize.STRING, allowNull: true },
+            jdSentAt: { type: Sequelize.DATE, allowNull: true },
+
+            // Resume Details
+            followUpBy: { type: Sequelize.STRING, allowNull: true },
+            followUpDate: { type: Sequelize.DATE, allowNull: true },
+            followUpResponse: { type: Sequelize.STRING, allowNull: true },
+            resumeDate: { type: Sequelize.DATE, allowNull: true },
+            resumeCount: { type: Sequelize.INTEGER, allowNull: true },
 
             // Foreign key to User
             userId: { type: Sequelize.BIGINT, allowNull: true },
@@ -33,12 +41,11 @@ module.exports = (sequelize, Sequelize) => {
     );
 
     CoSheet.associate = function (models) {
-        // CoSheet belongs to User
         CoSheet.belongsTo(models.User, {
-            foreignKey: 'userId',
-            onDelete: 'SET NULL',
-            onUpdate: 'CASCADE',
-            constraints: true
+            foreignKey: "userId",
+            onDelete: "SET NULL",
+            onUpdate: "CASCADE",
+            constraints: true,
         });
     };
 
