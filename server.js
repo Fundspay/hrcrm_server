@@ -24,11 +24,12 @@ app.use(compression());
 
 // CORS
 app.use(cors({
-  origin: "*",
+  origin: ["http://localhost:8080", "https://fundsaudit.com","http://fundsaudit.com"], // allow localhost and your domain
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: "*",
   optionsSuccessStatus: 204
 }));
+
 
 // ────── LOGGING (before routes) ──────────────────────────────────────
 app.use(
