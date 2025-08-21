@@ -30,5 +30,15 @@ CONFIG.mailHost = process.env.MAIL_HOST;
 CONFIG.mailPort = process.env.MAIL_PORT;
 CONFIG.mailSecure = process.env.MAIL_SECURE;
 
+CONFIG.awsRegion = process.env.AWS_REGION || "us-east-1";
+CONFIG.awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID || "your-aws-access-key-id";
+CONFIG.awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || "your-aws-secret-access-key";
+
+
+CONFIG.s3Region = process.env.S3_REGION || 'ap-south-1';
+CONFIG.s3AccessKeyId = process.env.S3_ACCESS_KEY_ID || 'your-access-key-id';
+CONFIG.s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY || 'your-secret-access-key';
+CONFIG.s3Bucket = process.env.S3_BUCKET || 'your-bucket-name';
+
 
 module.exports = CONFIG;  // <-- ✅ export it
