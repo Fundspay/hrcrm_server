@@ -8,6 +8,7 @@ const usertypeRouter = require("./usertype.route");
 const cosheetRouter = require("./cosheet.route"); 
 const positionRouter = require("./position.route");
 const resumedetailsRouter =require("./resumedetails.route")
+const mytargetRouter = require("./mytarget.route");
 
 
 // Health Check Route
@@ -22,5 +23,6 @@ router.use("/usertype", usertypeRouter);
 router.use("/cosheet", cosheetRouter);
 router.use("/position", positionRouter);
 router.use("/resumedetails", resumedetailsRouter);
+router.use("/mytarget", mytargetRouter);
 
 module.exports = router;
