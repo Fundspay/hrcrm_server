@@ -124,7 +124,7 @@ var updateUser = async (req, res) => {
         const user = await model.User.findByPk(req.params.id);
         if (!user || user.isDeleted) return ReE(res, "User not found", 404);
 
-        const { firstName, lastName,password, phoneNumber, type, gender, email, MyTarget } = req.body;
+        const { firstName, lastName,password, phoneNumber, type, gender, email } = req.body;
 
         // Validate foreign keys if provided
         if (type && !(await model.UserType.findByPk(type))) {
@@ -140,8 +140,7 @@ var updateUser = async (req, res) => {
             phoneNumber: phoneNumber || user.phoneNumber,
             type: type || user.type,
             gender: gender || user.gender,
-            email: email || user.email,
-            MyTarget: MyTarget || user.MyTarget,
+            email: email || user.email
         };
 
         if (password) {

@@ -40,7 +40,6 @@ const createCoSheet = async (req, res) => {
             internshipType: data.connect?.internshipType ?? data.internshipType ?? null,
             detailedResponse: data.connect?.detailedResponse ?? data.detailedResponse ?? null,
 
-            // ✅ Save proper FK instead of free-text
             userId: data.userId ?? req.user?.id ?? null,
 
             // Optional: keep connectedBy for display only
@@ -70,25 +69,47 @@ module.exports.createCoSheet = createCoSheet;
 
 
 // Update Connect Fields
+"use strict";
+const model = require("../models/index");
+const { ReE, ReS } = require("../utils/util.service.js");
+const { Op } = require("sequelize");
+
+const allowedMonths = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec"
+];
+
 const updateConnectFields = async (req, res) => {
   try {
     const record = await model.CoSheet.findByPk(req.params.id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
 
-    const connectFields = [
+    // ✅ Now includes college details also
+    const allowedFields = [
+      // College details
+      "sr",
+      "collegeName",
+      "coordinatorName",
+      "mobileNumber",
+      "emailId",
+      "city",
+      "state",
+      "course",
+
+      // Connect details
       "connectedBy",
       "dateOfConnect",
       "callResponse",
       "internshipType",
       "detailedResponse",
-      "userId", // ✅ allow userId to be updated
+      "userId"
     ];
 
     const allowedInternshipTypes = ["fulltime", "sip", "liveproject", "wip", "others"];
     const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
     const updates = {};
 
-    for (let f of connectFields) {
+    for (let f of allowedFields) {
       if (req.body[f] !== undefined) {
         if (f === "internshipType") {
           if (req.body[f] && !allowedInternshipTypes.includes(req.body[f].toLowerCase())) {
@@ -101,6 +122,27 @@ const updateConnectFields = async (req, res) => {
             return ReE(res, "Invalid callResponse. Allowed: connected, not answered, busy, switch off, invalid", 400);
           }
           updates[f] = val || null;
+        } else if (f === "detailedResponse") {
+          const detailed = req.body[f];
+          updates[f] = detailed;
+
+          if (detailed?.month) {
+            const month = detailed.month.toLowerCase();
+            if (!allowedMonths.includes(month)) {
+              return ReE(res, "Invalid month in detailedResponse. Allowed: Jan–Dec", 400);
+            }
+
+            // Check if JD already sent for this college/month
+            const jdExists = await model.CoSheet.findOne({
+              where: {
+                collegeName: updates.collegeName ?? record.collegeName,
+                "detailedResponse.month": month,
+                jdSent: true
+              }
+            });
+
+            updates.jdSent = !!jdExists;
+          }
         } else {
           updates[f] = req.body[f];
         }
@@ -278,19 +320,18 @@ const sendJDToCollege = async (req, res) => {
 module.exports.sendJDToCollege = sendJDToCollege;
 
 
-const getCallStatsByUser = async (req, res) => {
+const getCallStatsByUserWithTarget = async (req, res) => {
   try {
     const userId = req.params.userId;
     let { fromDate, toDate } = req.query;
 
     const now = new Date();
 
-    // ✅ Default to current month in LOCAL timezone
+    // Default to current month
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-      // Format as YYYY-MM-DD in local time
       const formatLocalDate = (date) =>
         `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -298,49 +339,40 @@ const getCallStatsByUser = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
+    // Fetch CoSheet records for user in date range
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        dateOfConnect: {
-          [Op.between]: [new Date(fromDate), new Date(toDate)]
-        }
-      },
-      include: [{ model: model.User, attributes: ["id"] }]
-    });
-
-    if (!records.length) {
-      return ReS(res, { success: true, message: "No records found", data: {} }, 200);
-    }
-
-    const totalCalls = records.length;
-    const stats = {};
-
-    const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
-
-    // Initialize counts
-    allowedCallResponses.forEach((resp) => {
-      stats[resp] = 0;
-    });
-
-    // Count occurrences
-    records.forEach((rec) => {
-      const response = (rec.callResponse || "").toLowerCase();
-      if (allowedCallResponses.includes(response)) {
-        stats[response]++;
+        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
       }
     });
 
-    // Calculate percentages
+    const totalCalls = records.length;
+
+    // Fetch user's target for the period
+    const targetRecord = await model.MyTarget.findOne({
+      where: { userId }
+    });
+
+    const targetCalls = targetRecord ? targetRecord.calls : 0;
+    const achievedCalls = totalCalls;
+    const remainingCalls = Math.max(targetCalls - achievedCalls, 0);
+    const achievementPercent = targetCalls > 0 ? ((achievedCalls / targetCalls) * 100).toFixed(2) : 0;
+
+    // Count call responses
+    const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
+    const stats = {};
+    allowedCallResponses.forEach((resp) => { stats[resp] = 0; });
+    records.forEach((rec) => {
+      const response = (rec.callResponse || "").toLowerCase();
+      if (allowedCallResponses.includes(response)) stats[response]++;
+    });
     const percentages = {};
     allowedCallResponses.forEach((resp) => {
       percentages[resp] = ((stats[resp] / totalCalls) * 100).toFixed(2);
     });
 
-    // ✅ Show proper local month name
-    const monthLabel = new Date(fromDate).toLocaleString("en-US", {
-      month: "long",
-      year: "numeric"
-    });
+    const monthLabel = new Date(fromDate).toLocaleString("en-US", { month: "long", year: "numeric" });
 
     return ReS(res, {
       success: true,
@@ -349,8 +381,12 @@ const getCallStatsByUser = async (req, res) => {
         fromDate,
         toDate,
         totalCalls,
+        targetCalls,
+        achievedCalls,
+        remainingCalls,
+        achievementPercent,
         counts: stats,
-        percentages,
+        percentages
       }
     }, 200);
 
@@ -360,7 +396,7 @@ const getCallStatsByUser = async (req, res) => {
   }
 };
 
-module.exports.getCallStatsByUser = getCallStatsByUser;
+module.exports.getCallStatsByUserWithTarget = getCallStatsByUserWithTarget;
 
 
 const getCallStatsAllUsers = async (req, res) => {
@@ -411,15 +447,14 @@ const getCallStatsAllUsers = async (req, res) => {
 
 module.exports.getCallStatsAllUsers = getCallStatsAllUsers;
 
-
-const getJdStats = async (req, res) => {
+const getJdStatsWithTarget = async (req, res) => {
   try {
     const userId = req.params.userId;
     let { fromDate, toDate } = req.query;
 
     const now = new Date();
 
-    // ✅ Default to current month in LOCAL timezone
+    // Default to current month
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -431,8 +466,8 @@ const getJdStats = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
-    // ✅ JD sent by this user
-    const userCount = await model.CoSheet.count({
+    // JD sent by this user
+    const jdSentByUser = await model.CoSheet.count({
       where: {
         userId,
         jdSentAt: {
@@ -441,8 +476,8 @@ const getJdStats = async (req, res) => {
       }
     });
 
-    // ✅ JD sent by all users
-    const totalCount = await model.CoSheet.count({
+    // JD sent by all users
+    const jdSentByAllUsers = await model.CoSheet.count({
       where: {
         jdSentAt: {
           [Op.between]: [new Date(fromDate), new Date(toDate)]
@@ -450,7 +485,12 @@ const getJdStats = async (req, res) => {
       }
     });
 
-    // ✅ Month label
+    // Fetch user's JD target
+    const targetRecord = await model.MyTarget.findOne({ where: { userId } });
+    const jdTarget = targetRecord ? targetRecord.jds : 0;
+    const remainingJD = Math.max(jdTarget - jdSentByUser, 0);
+    const achievementPercent = jdTarget > 0 ? ((jdSentByUser / jdTarget) * 100).toFixed(2) : 0;
+
     const monthLabel = new Date(fromDate).toLocaleString("en-US", {
       month: "long",
       year: "numeric"
@@ -462,8 +502,11 @@ const getJdStats = async (req, res) => {
         month: monthLabel,
         fromDate,
         toDate,
-        jdSentByUser: userCount,
-        jdSentByAllUsers: totalCount
+        jdTarget,
+        jdSentByUser,
+        remainingJD,
+        achievementPercent,
+        jdSentByAllUsers
       }
     }, 200);
 
@@ -473,7 +516,8 @@ const getJdStats = async (req, res) => {
   }
 };
 
-module.exports.getJdStats = getJdStats;
+module.exports.getJdStatsWithTarget = getJdStatsWithTarget;
+
 
 const getInternshipStats = async (req, res) => {
   try {
@@ -548,16 +592,15 @@ const getInternshipStats = async (req, res) => {
 
 module.exports.getInternshipStats = getInternshipStats;
 
-
-
-// ✅ Get InternshipType → College Names Stats
+// ✅ Get InternshipType → College Names Stats (filtered by detailedResponse months)
 const getInternshipTypeColleges = async (req, res) => {
   try {
+    const userId = req.query.userId; // optional
     let { fromDate, toDate } = req.query;
 
     const now = new Date();
 
-    // ✅ Default to current month
+    // ✅ Default to current month if no range is provided
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -569,23 +612,38 @@ const getInternshipTypeColleges = async (req, res) => {
       toDate = formatDate(lastDay);
     }
 
-    // ✅ Fetch records in date range
-    const records = await model.CoSheet.findAll({
-      where: {
-        dateOfConnect: {
-          [Op.between]: [new Date(fromDate), new Date(toDate)],
-        },
+    // ✅ Allowed months (to check inside detailedResponse)
+    const allowedMonths = [
+      "january", "february", "march", "april", "may", "june",
+      "july", "august", "september", "october", "november", "december"
+    ];
+
+    // ✅ Fetch records in date range (with optional user filter)
+    const whereClause = {
+      dateOfConnect: {
+        [Op.between]: [new Date(fromDate), new Date(toDate)],
       },
-      attributes: ["internshipType", "collegeName"], // collegeName is directly in CoSheet
+    };
+    if (userId) whereClause.userId = userId;
+
+    const records = await model.CoSheet.findAll({
+      where: whereClause,
+      attributes: ["internshipType", "collegeName", "detailedResponse"],
     });
 
     if (!records.length) {
       return ReS(res, { success: true, message: "No records found", data: {} }, 200);
     }
 
-    // ✅ Group by internshipType
+    // ✅ Group by internshipType (only if detailedResponse contains a valid month)
     const grouped = {};
     records.forEach((rec) => {
+      const detailedResp = (rec.detailedResponse || "").toLowerCase();
+
+      // Only include if detailedResponse contains a valid month
+      const hasMonth = allowedMonths.some((m) => detailedResp.includes(m));
+      if (!hasMonth) return;
+
       const type = (rec.internshipType || "others").toLowerCase();
       const collegeName = rec.collegeName || "Unknown";
 
