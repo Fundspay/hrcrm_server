@@ -586,7 +586,8 @@ const getInternshipStats = async (req, res) => {
 
 module.exports.getInternshipStats = getInternshipStats;
 
-// ✅ Get InternshipType → College Names Stats (filtered by detailedResponse months)
+
+// ✅ Get InternshipType → College + Month Stats from detailedResponse (filter by current/requested month)
 const getInternshipTypeColleges = async (req, res) => {
   try {
     const userId = req.query.userId; // optional
@@ -594,7 +595,7 @@ const getInternshipTypeColleges = async (req, res) => {
 
     const now = new Date();
 
-    // ✅ Default to current month if no range is provided
+    // ✅ Default to current month if no range provided
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -606,13 +607,17 @@ const getInternshipTypeColleges = async (req, res) => {
       toDate = formatDate(lastDay);
     }
 
-    // ✅ Allowed months (to check inside detailedResponse)
+    // ✅ Allowed months
     const allowedMonths = [
       "january", "february", "march", "april", "may", "june",
       "july", "august", "september", "october", "november", "december"
     ];
 
-    // ✅ Fetch records in date range (with optional user filter)
+    // ✅ Current/requested month
+    const currentMonth = new Date(fromDate).getMonth(); // 0-11
+    const currentMonthName = allowedMonths[currentMonth];
+
+    // ✅ Build where clause
     const whereClause = {
       dateOfConnect: {
         [Op.between]: [new Date(fromDate), new Date(toDate)],
@@ -620,38 +625,30 @@ const getInternshipTypeColleges = async (req, res) => {
     };
     if (userId) whereClause.userId = userId;
 
+    // ✅ Fetch records
     const records = await model.CoSheet.findAll({
       where: whereClause,
-      attributes: ["internshipType", "collegeName", "detailedResponse"],
+      attributes: ["internshipType", "collegeName", "detailedResponse", "jdSentAt"],
     });
 
-    if (!records.length) {
-      return ReS(res, { success: true, message: "No records found", data: {} }, 200);
-    }
+    // ✅ Process each record
+    const result = [];
 
-    // ✅ Group by internshipType (only if detailedResponse contains a valid month)
-    const grouped = {};
     records.forEach((rec) => {
       const detailedResp = (rec.detailedResponse || "").toLowerCase();
 
-      // Only include if detailedResponse contains a valid month
-      const hasMonth = allowedMonths.some((m) => detailedResp.includes(m));
-      if (!hasMonth) return;
+      // Only include if the detailedResponse mentions the current/requested month
+      if (!detailedResp.includes(currentMonthName)) return;
 
-      const type = (rec.internshipType || "others").toLowerCase();
-      const collegeName = rec.collegeName || "Unknown";
-
-      if (!grouped[type]) grouped[type] = new Set();
-      grouped[type].add(collegeName);
+      result.push({
+        collegeName: rec.collegeName || "Unknown",
+        internshipType: (rec.internshipType || "others").toLowerCase(),
+        monthMentioned: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
+        jdSent: rec.jdSentAt ? true : false,
+      });
     });
 
-    // ✅ Convert Sets to arrays
-    const result = {};
-    Object.keys(grouped).forEach((t) => {
-      result[t] = Array.from(grouped[t]);
-    });
-
-    // ✅ Month label
+    // ✅ Month label (for overall filter range)
     const monthLabel = new Date(fromDate).toLocaleString("en-US", {
       month: "long",
       year: "numeric",
