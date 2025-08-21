@@ -68,12 +68,6 @@ const createCoSheet = async (req, res) => {
 module.exports.createCoSheet = createCoSheet;
 
 
-// Update Connect Fields
-"use strict";
-const model = require("../models/index");
-const { ReE, ReS } = require("../utils/util.service.js");
-const { Op } = require("sequelize");
-
 const allowedMonths = [
   "jan", "feb", "mar", "apr", "may", "jun",
   "jul", "aug", "sep", "oct", "nov", "dec"
