@@ -9,9 +9,13 @@ module.exports = (sequelize, Sequelize) => {
             gender: { type: Sequelize.BIGINT, allowNull: true },
             email: { type: Sequelize.STRING, allowNull: true, unique: true },
             phoneNumber: { type: Sequelize.STRING, allowNull: true, unique: true },
+            positionModel: { type: Sequelize.BIGINT, allowNull: true },
             password: { type: Sequelize.STRING, allowNull: false },
             photoUrl: { type: Sequelize.STRING, allowNull: true },
+            MyTarget: { type: Sequelize.BIGINT, allowNull: true },
             type: { type: Sequelize.BIGINT, allowNull: true }, // user type
+            lastLoginAt: { type: Sequelize.DATE, allowNull: true },
+            lastLogoutAt: { type: Sequelize.DATE, allowNull: true },
             isActive: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
             createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
             updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
@@ -35,6 +39,13 @@ module.exports = (sequelize, Sequelize) => {
 
         User.belongsTo(models.Gender, {
             foreignKey: "gender",
+            onDelete: "RESTRICT",
+            onUpdate: "RESTRICT",
+            constraints: true,
+        });
+
+        User.belongsTo(models.Position, {
+            foreignKey: "position",
             onDelete: "RESTRICT",
             onUpdate: "RESTRICT",
             constraints: true,
