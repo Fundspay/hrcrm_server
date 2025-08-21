@@ -10,7 +10,7 @@ var addUser = async (req, res) => {
         const { firstName, lastName, email, phoneNumber, password, gender, type, position } = req.body;
 
         // Basic validation
-        if (!firstName || !lastName || !email || !password || !type) {
+        if (!firstName || !lastName || !email || !password || !type || !position) {
             return ReE(res, "Missing required fields", 400);
         }
 
@@ -124,7 +124,7 @@ var updateUser = async (req, res) => {
         const user = await model.User.findByPk(req.params.id);
         if (!user || user.isDeleted) return ReE(res, "User not found", 404);
 
-        const { firstName, lastName,password, phoneNumber, type, gender, email } = req.body;
+        const { firstName, lastName,phoneNumber, type, gender, email } = req.body;
 
         // Validate foreign keys if provided
         if (type && !(await model.UserType.findByPk(type))) {
