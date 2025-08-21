@@ -103,7 +103,8 @@ var fetchSingleUser = async (req, res) => {
         const user = await model.User.findByPk(req.params.id, {
             include: [
                 { model: model.UserType, attributes: { exclude: ["createdAt", "updatedAt"] } },
-                { model: model.Gender, attributes: { exclude: ["createdAt", "updatedAt"] } }
+                { model: model.Gender, attributes: { exclude: ["createdAt", "updatedAt"] } },
+                { model: model.Position, attributes: { exclude: ["createdAt", "updatedAt"] } }
             ]
         });
 
@@ -123,7 +124,7 @@ var updateUser = async (req, res) => {
         const user = await model.User.findByPk(req.params.id);
         if (!user || user.isDeleted) return ReE(res, "User not found", 404);
 
-        const { firstName, lastName,password, phoneNumber, type, gender, email } = req.body;
+        const { firstName, lastName,password, phoneNumber, type, gender, email, MyTarget } = req.body;
 
         // Validate foreign keys if provided
         if (type && !(await model.UserType.findByPk(type))) {
@@ -140,6 +141,7 @@ var updateUser = async (req, res) => {
             type: type || user.type,
             gender: gender || user.gender,
             email: email || user.email,
+            MyTarget: MyTarget || user.MyTarget,
         };
 
         if (password) {
@@ -191,6 +193,8 @@ const loginWithEmailPassword = async (req, res) => {
         const isFirstLogin = !user.hasLoggedIn;
         if (isFirstLogin) await user.update({ hasLoggedIn: true });
 
+        await user.update({ lastLoginAt: new Date() });
+
         const payload = {
             user_id: user.id,
             name: user.name,
@@ -218,3 +222,28 @@ const loginWithEmailPassword = async (req, res) => {
 };
 
 module.exports.loginWithEmailPassword = loginWithEmailPassword;
+
+// ✅ Logout User
+const logoutUser = async (req, res) => {
+    try {
+        const { userId } = req.body; 
+
+        if (!userId) {
+            return ReE(res, "Missing userId", 400);
+        }
+
+        const user = await model.User.findByPk(userId);
+        if (!user || user.isDeleted) {
+            return ReE(res, "User not found", 404);
+        }
+
+        // Optional: track logout timestamp
+        await user.update({ lastLogoutAt: new Date() });
+
+        return ReS(res, { success: true, message: "Logged out successfully" }, 200);
+    } catch (error) {
+        console.error("Logout Error:", error);
+        return ReE(res, error.message, 500);
+    }
+};
+module.exports.logoutUser = logoutUser;
