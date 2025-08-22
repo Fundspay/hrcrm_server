@@ -26,8 +26,7 @@ app.use(compression());
 const corsOptions = {
   origin: [
     "http://localhost:8080",
-    "https://fundsaudit.com",
-    "http://fundsaudit.com"
+    "https://fundsaudit.com"
   ],
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
