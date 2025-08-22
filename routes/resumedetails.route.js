@@ -9,5 +9,6 @@ router.put("/update/:id", resumedetailsController.updateResumeFields);
 router.get("/analysis/:userId", resumedetailsController.getResumeAnalysis);
 router.get("/total-analysis/:userId", resumedetailsController.gettotalResumeAnalysis);
 router.get("/analysis-per-cosheet/:userId", resumedetailsController.getResumeAnalysisPerCoSheet);
+router.get("/followup-totals", resumedetailsController.getFollowUpResumeTotals);
 
 module.exports = router;
