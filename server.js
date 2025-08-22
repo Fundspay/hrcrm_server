@@ -1,9 +1,10 @@
-require("dotenv").config();
+require("dotenv").config(); 
 
 const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
 const expressWinston = require("express-winston");
+
 const model = require("./models/index");
 const CONFIG = require("./config/config");
 const v1 = require("./routes/v1");
@@ -21,19 +22,33 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Gzip compression
 app.use(compression());
 
-// CORS
-app.use(
-  cors({
-    origin: [
-      "http://localhost:8080",
-      "https://fundsaudit.com",
-      "http://fundsaudit.com"
-    ],
-    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: "*",
-    optionsSuccessStatus: 204
-  })
-);
+// ────── CORS ───────────────────────────────────────────
+const corsOptions = {
+  origin: [
+    "http://localhost:8080",
+    "https://fundsaudit.com",
+    "http://fundsaudit.com"
+  ],
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS globally
+app.use(cors(corsOptions));
+
+// Ensure CORS headers are always set
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header("Access-Control-Allow-Methods", corsOptions.methods.join(","));
+  res.header("Access-Control-Allow-Headers", corsOptions.allowedHeaders.join(","));
+  res.header("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(corsOptions.optionsSuccessStatus);
+  }
+  next();
+});
 
 // ────── LOGGING (before routes) ─────────────────────────
 app.use(
@@ -45,7 +60,7 @@ app.use(
 );
 
 // ────── API ROUTES ─────────────────────────────────────
-app.use("/api/v1", v1); // only use path, not full URL
+app.use("/api/v1", v1);
 
 // ────── HEALTH CHECK ───────────────────────────────────
 app.get("/api/healthz", async (req, res) => {
@@ -79,7 +94,7 @@ model.sequelize
   .then(() => logger.info("sequelize: Database Sync Success"))
   .catch(err => {
     logger.error("sequelize: Database Init Failed", err);
-    process.exit(1); // Exit on fatal DB error
+    process.exit(1);
   });
 
 // ────── START SERVER ───────────────────────────────────
