@@ -99,3 +99,27 @@ var deleteTarget = async function (req, res) {
     }
 };
 module.exports.deleteTarget = deleteTarget;
+
+// ✅ Fetch all targets for a specific user
+var getTargetsByUser = async function (req, res) {
+    try {
+        const { userId } = req.query;
+        if (!userId) return ReE(res, "userId is required", 400);
+
+        const targets = await model.MyTarget.findAll({
+            where: { userId },
+            include: [
+                { model: model.User, attributes: ["id", "name", "email"] },
+                { model: model.CoSheet, attributes: ["id", "collegeName"] }
+            ]
+        });
+
+        if (!targets.length) return ReS(res, { success: true, message: "No targets found for this user", data: [] }, 200);
+
+        return ReS(res, { success: true, data: targets }, 200);
+    } catch (error) {
+        return ReE(res, error.message, 500);
+    }
+};
+module.exports.getTargetsByUser = getTargetsByUser;
+
