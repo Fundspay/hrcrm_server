@@ -29,6 +29,7 @@ module.exports = (sequelize, Sequelize) => {
             // Foreign key (optional) → Link to CoSheet if needed
             coSheetId: { type: Sequelize.BIGINT, allowNull: true },
             Dateofonboarding: { type: Sequelize.DATE, allowNull: true },
+            userId: { type: Sequelize.BIGINT, allowNull: true },
 
             // Status fields
             isActive: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
@@ -48,7 +49,7 @@ module.exports = (sequelize, Sequelize) => {
         });
 
         StudentResume.belongsTo(models.User, {
-            foreignKey: "UserId",
+            foreignKey: "userId",
             onDelete: "SET NULL",
             onUpdate: "CASCADE",
             constraints: true,
