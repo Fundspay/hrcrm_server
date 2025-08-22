@@ -123,3 +123,47 @@ var getTargetsByUser = async function (req, res) {
 };
 module.exports.getTargetsByUser = getTargetsByUser;
 
+// ✅ Upsert target: create new or update existing
+var upsertTarget = async function (req, res) {
+    let { userId, jds, calls } = req.body;
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    try {
+        // Find the latest CoSheet for the user
+        const coSheet = await model.CoSheet.findOne({
+            where: { userId },
+            order: [["createdAt", "DESC"]],
+        });
+
+        if (!coSheet) return ReE(res, "No CoSheet found for this user", 404);
+
+        // Check if a target already exists for this CoSheet
+        let target = await model.MyTarget.findOne({
+            where: { userId, coSheetId: coSheet.id },
+        });
+
+        if (target) {
+            // ✅ Update existing target
+            await target.update({
+                jds: jds !== undefined ? jds : target.jds,
+                calls: calls !== undefined ? calls : target.calls,
+            });
+            return ReS(res, { message: "Target updated successfully", data: target }, 200);
+        } else {
+            // ✅ Create new target
+            target = await model.MyTarget.create({
+                userId,
+                coSheetId: coSheet.id,
+                jds: jds || 0,
+                calls: calls || 0,
+            });
+            return ReS(res, { message: "Target created successfully", data: target }, 201);
+        }
+    } catch (error) {
+        return ReE(res, error.message, 500);
+    }
+};
+
+module.exports.upsertTarget = upsertTarget;
+
+
