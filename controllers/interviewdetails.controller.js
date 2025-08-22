@@ -67,18 +67,19 @@ const upsertInterviewDetails = async (req, res) => {
       { returning: true }
     );
 
-    // Fetch updated record with interviewer info
+    // Fetch updated record with user info (without alias)
     const record = await model.InterviewDetails.findOne({
       where: { interviewID },
       include: [
-        { model: model.User, as: "interviewer", attributes: ["id", "firstName", "lastName"] },
+        { model: model.User, attributes: ["id", "firstName", "lastName"] },
       ],
     });
 
+    const interviewer = record.User; // no alias
     const data = {
       ...record.toJSON(),
-      interviewedByName: record.interviewer
-        ? `${record.interviewer.firstName} ${record.interviewer.lastName}`
+      interviewedByName: interviewer
+        ? `${interviewer.firstName} ${interviewer.lastName}`
         : null,
     };
 
@@ -95,7 +96,6 @@ const upsertInterviewDetails = async (req, res) => {
 
 module.exports.upsertInterviewDetails = upsertInterviewDetails;
 
-
 // Get Interview Details by ID
 const getInterviewDetails = async (req, res) => {
   try {
@@ -104,16 +104,17 @@ const getInterviewDetails = async (req, res) => {
     const record = await model.InterviewDetails.findOne({
       where: { interviewID },
       include: [
-        { model: model.User, as: "interviewer", attributes: ["id", "firstName", "lastName"] },
+        { model: model.User, attributes: ["id", "firstName", "lastName"] },
       ],
     });
 
     if (!record) return ReS(res, { success: true, data: null }, 200);
 
+    const interviewer = record.User; // no alias
     const data = {
       ...record.toJSON(),
-      interviewedByName: record.interviewer
-        ? `${record.interviewer.firstName} ${record.interviewer.lastName}`
+      interviewedByName: interviewer
+        ? `${interviewer.firstName} ${interviewer.lastName}`
         : null,
     };
 
@@ -130,18 +131,19 @@ const getAllInterviews = async (req, res) => {
   try {
     const records = await model.InterviewDetails.findAll({
       include: [
-        { model: model.User, as: "interviewer", attributes: ["id", "firstName", "lastName"] },
+        { model: model.User, attributes: ["id", "firstName", "lastName"] },
       ],
     });
 
     if (!records.length) return ReS(res, { success: true, data: [] }, 200);
 
     const data = records.map((rec) => {
+      const interviewer = rec.User; // no alias
       const r = rec.toJSON();
       return {
         ...r,
-        interviewedByName: rec.interviewer
-          ? `${rec.interviewer.firstName} ${rec.interviewer.lastName}`
+        interviewedByName: interviewer
+          ? `${interviewer.firstName} ${interviewer.lastName}`
           : null,
       };
     });

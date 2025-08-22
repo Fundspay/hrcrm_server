@@ -39,11 +39,10 @@ const createCoSheet = async (req, res) => {
             callResponse: data.connect?.callResponse ?? data.callResponse ?? null,
             internshipType: data.connect?.internshipType ?? data.internshipType ?? null,
             detailedResponse: data.connect?.detailedResponse ?? data.detailedResponse ?? null,
-
-            userId: data.userId ?? req.user?.id ?? null,
-
-            // Optional: keep connectedBy for display only
             connectedBy: data.connect?.connectedBy ?? data.connectedBy ?? null,
+
+            // Foreign key to User
+            userId: data.userId ?? req.user?.id ?? null,
           };
 
           if (!payload.userId) {
@@ -68,35 +67,21 @@ const createCoSheet = async (req, res) => {
 module.exports.createCoSheet = createCoSheet;
 
 
+
 const allowedMonths = [
   "jan", "feb", "mar", "apr", "may", "jun",
   "jul", "aug", "sep", "oct", "nov", "dec"
 ];
 
+// Update connect fields
 const updateConnectFields = async (req, res) => {
   try {
     const record = await model.CoSheet.findByPk(req.params.id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
 
-    // ✅ Now includes college details also
     const allowedFields = [
-      // College details
-      "sr",
-      "collegeName",
-      "coordinatorName",
-      "mobileNumber",
-      "emailId",
-      "city",
-      "state",
-      "course",
-
-      // Connect details
-      "connectedBy",
-      "dateOfConnect",
-      "callResponse",
-      "internshipType",
-      "detailedResponse",
-      "userId"
+      "sr", "collegeName", "coordinatorName", "mobileNumber", "emailId", "city", "state", "course",
+      "connectedBy", "dateOfConnect", "callResponse", "internshipType", "detailedResponse", "userId"
     ];
 
     const allowedInternshipTypes = ["fulltime", "sip", "liveproject", "wip", "others"];
@@ -116,27 +101,6 @@ const updateConnectFields = async (req, res) => {
             return ReE(res, "Invalid callResponse. Allowed: connected, not answered, busy, switch off, invalid", 400);
           }
           updates[f] = val || null;
-        } else if (f === "detailedResponse") {
-          const detailed = req.body[f];
-          updates[f] = detailed;
-
-          if (detailed?.month) {
-            const month = detailed.month.toLowerCase();
-            if (!allowedMonths.includes(month)) {
-              return ReE(res, "Invalid month in detailedResponse. Allowed: Jan–Dec", 400);
-            }
-
-            // Check if JD already sent for this college/month
-            const jdExists = await model.CoSheet.findOne({
-              where: {
-                collegeName: updates.collegeName ?? record.collegeName,
-                "detailedResponse.month": month,
-                jdSent: true
-              }
-            });
-
-            updates.jdSent = !!jdExists;
-          }
         } else {
           updates[f] = req.body[f];
         }
@@ -149,43 +113,33 @@ const updateConnectFields = async (req, res) => {
 
     await record.update(updates);
     return ReS(res, { success: true, data: record }, 200);
-
   } catch (error) {
     console.error("CoSheet Update Error:", error);
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.updateConnectFields = updateConnectFields;
 
-// Get All CoSheets
+// Get all CoSheets
 const getCoSheets = async (req, res) => {
   try {
-    // Fetch all CoSheets
     const records = await model.CoSheet.findAll();
-
-    // Fetch all registered users
     const users = await model.User.findAll({
       where: { isActive: true, isDeleted: false },
       attributes: ["id", "firstName", "lastName", "email"],
       order: [["firstName", "ASC"]],
     });
 
-    return ReS(res, {
-      success: true,
-      data: records,
-      users, // added field with all registered users
-    }, 200);
+    return ReS(res, { success: true, data: records, users }, 200);
   } catch (error) {
     console.error("CoSheet Fetch All Error:", error);
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.getCoSheets = getCoSheets;
 
 
-// Get Single CoSheet by ID
+// Get single CoSheet
 const getCoSheetById = async (req, res) => {
   try {
     const record = await model.CoSheet.findByPk(req.params.id);
@@ -200,24 +154,15 @@ module.exports.getCoSheetById = getCoSheetById;
 
 
 // Send JD to college email
-// Send JD to college email with detailed proposal
 const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
     const { cc, bcc } = req.body;
-
     const record = await model.CoSheet.findByPk(id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
+    if (!record.emailId) return ReE(res, "No email found for this college", 400);
+    if (!record.internshipType) return ReE(res, "No internshipType set for this record", 400);
 
-    if (!record.emailId) {
-      return ReE(res, "No email found for this college", 400);
-    }
-
-    if (!record.internshipType) {
-      return ReE(res, "No internshipType set for this record", 400);
-    }
-
-    // JD mapping
     const JD_MAP = {
       fulltime: "jds/fulltime.pdf",
       liveproject: "jds/liveproject.pdf",
@@ -226,106 +171,37 @@ const sendJDToCollege = async (req, res) => {
       others: "jds/others.pdf",
     };
 
-    const jdKeyType = record.internshipType
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '');
+    const jdKeyType = record.internshipType.trim().toLowerCase().replace(/\s+/g, '');
     const jdKey = JD_MAP[jdKeyType];
+    if (!jdKey) return ReE(res, `No JD mapped for internshipType: ${record.internshipType}`, 400);
 
-    if (!jdKey) {
-      return ReE(res, `No JD mapped for internshipType: ${normalizedType}`, 400);
-    }
-
-    // fetch JD file from S3
-    const jdFile = await s3
-      .getObject({ Bucket: "fundsroomhr", Key: jdKey })
-      .promise();
+    const jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
 
     const subject = `Collaboration Proposal for Live Projects, Internships & Placements – FundsAudit`;
 
-    // HTML email body like your proposal
-    const html = `
-      <p>Respected ${record.coordinatorName || "Sir/Madam"},</p>
-
+    const html = `<p>Respected ${record.coordinatorName || "Sir/Madam"},</p>
       <p>Warm greetings from FundsAudit!</p>
-
-      <p>We are reaching out with an exciting collaboration opportunity for your institute ${record.collegeName ||
-      ""}, aimed at enhancing student development through real-time industry exposure in the fintech space.</p>
-
-      <p>Founded in 2020, FundsAudit is an ISO-certified, innovation-driven fintech startup, registered under the Startup India initiative with 400,000 active customers. We are members of AMFI, SEBI, BSE, and NSE. As part of our commitment to bridging the gap between academic learning and practical application, we propose a Student Development Program (SDP) for your MBA students (1st & 2nd year) specializing in Finance and Marketing.</p>
-
-      <h4>Collaboration Proposal:</h4>
-      <ul>
-        <li><b>Flexible Participation:</b> 2-hour/day commitment (1 hour training + 1 hour individual work)</li>
-        <li><b>Performance-Based Stipend:</b> INR 1,000 to INR 7,000 based on quality, innovation, and project delivery</li>
-        <li><b>Value-Added Certifications:</b> Specialized certificates + POWER-Bi & Financial/Marketing Modelling certificate; recognition for top performers</li>
-        <li><b>Open to:</b> MBA 1st & 2nd year students (Finance & Marketing)</li>
-      </ul>
-
-      <p>Next Steps: JD for the Internship is attached. If your institution is interested, we can formalize this collaboration by signing a Memorandum of Understanding (MoU). Upon signing, eligible students will be onboarded with orientation and training to commence the live project.</p>
-
-      <p>As discussed on the call, kindly share your response by <b>23rd August 2025, 11 AM</b>. Preplacement interviews will be conducted on the same day, with joining on <b>25th August 2025</b>.</p>
-
-      <p><b>Role:</b> Marketing Analyst & Financial Analyst<br/>
-      <b>Eligibility:</b> Management Students</p>
-
-      <p>Following the live project, students may also be considered for:</p>
-      <ul>
-        <li>Summer/Winter Internships</li>
-        <li>Pre-placement offers (PPOs)</li>
-        <li>Final placement opportunities</li>
-      </ul>
-
-      <p>Perks of the collaboration:</p>
-      <ul>
-        <li>Exposure to real-time fintech operations</li>
-        <li>Skill development aligned with industry expectations</li>
-        <li>Improved employability and practical insight alongside academics</li>
-        <li>Final placement opportunities</li>
-      </ul>
-
-      <p>Looking forward to a meaningful and mutually beneficial association.</p>
-
-      <p>Pooja M. Shedge<br/>
-      Branch Manager – Pune<br/>
-      +91 7385234536 | +91 7420861507<br/>
-      Pune, Maharashtra<br/>
-      <a href="https://www.fundsaudit.in/">https://www.fundsaudit.in/</a><br/>
-      <a href="https://www.fundsweb.in/sub_sectors/subsector">https://www.fundsweb.in/sub_sectors/subsector</a>
-      </p>
+      <p>JD attached for ${record.collegeName || ""}.</p>
     `;
 
-    // send mail with attachment + cc/bcc
     const mailResponse = await sendMail(
       record.emailId,
       subject,
       html,
-      [
-        {
-          filename: `${record.internshipType}.pdf`,
-          content: jdFile.Body,
-        },
-      ],
+      [{ filename: `${record.internshipType}.pdf`, content: jdFile.Body }],
       cc,
       bcc
     );
 
-    if (!mailResponse.success) {
-      return ReE(res, "Failed to send JD email", 500);
-    }
+    if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    await record.update({
-      jdSentAt: new Date()
-    });
-
-
-    return ReS(res, { success: true, message: "JD sent successfully with proposal" }, 200);
+    await record.update({ jdSentAt: new Date() });
+    return ReS(res, { success: true, message: "JD sent successfully" }, 200);
   } catch (error) {
     console.error("Send JD Error:", error);
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.sendJDToCollege = sendJDToCollege;
 
 

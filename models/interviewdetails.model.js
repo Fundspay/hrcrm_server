@@ -25,11 +25,10 @@ module.exports = (sequelize, Sequelize) => {
   );
 
   InterviewDetails.associate = function (models) {
-    // Correct association: interviewedBy -> User.id
+    // Association without alias
     InterviewDetails.belongsTo(models.User, {
       foreignKey: "interviewedBy",
       targetKey: "id",
-      as: "interviewer",
       onDelete: "SET NULL",
       onUpdate: "CASCADE",
     });
