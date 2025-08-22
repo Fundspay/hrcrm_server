@@ -24,10 +24,7 @@ app.use(compression());
 
 // ────── CORS ───────────────────────────────────────────
 const corsOptions = {
-  origin: [
-    "http://localhost:8080",
-    "https://fundsaudit.com"
-  ],
+  origin: "*",
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   credentials: true,
