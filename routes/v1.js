@@ -9,6 +9,7 @@ const cosheetRouter = require("./cosheet.route");
 const positionRouter = require("./position.route");
 const resumedetailsRouter =require("./resumedetails.route")
 const mytargetRouter = require("./mytarget.route");
+const interviewdetailsRouter = require("./interviewdetails.route");
 const studentresumeRouter = require("./studentresume.route");
 
 
@@ -25,6 +26,7 @@ router.use("/cosheet", cosheetRouter);
 router.use("/position", positionRouter);
 router.use("/resumedetails", resumedetailsRouter);
 router.use("/mytarget", mytargetRouter);
+router.use("/interviewdetails", interviewdetailsRouter);
 router.use("/studentresume", studentresumeRouter);
 
 module.exports = router;
