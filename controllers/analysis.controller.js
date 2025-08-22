@@ -47,11 +47,6 @@ const getDailyAnalysis = async (req, res) => {
 module.exports.getDailyAnalysis = getDailyAnalysis;
 
 
-"use strict";
-const model = require("../models/index");
-const { ReE, ReS } = require("../utils/util.service.js");
-const { Op } = require("sequelize");
-
 // GET Daily Connect Analysis per User
 const getDailyAnalysisByUser = async (req, res) => {
   try {
