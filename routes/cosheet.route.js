@@ -4,7 +4,7 @@ const express = require("express");
 const router = express.Router();
 const cosheetController = require("../controllers/cosheet.controller");
 
-router.post("/register", cosheetController.createCoSheet);
+router.post("/add", cosheetController.createCoSheet);
 router.put("/update/:id", cosheetController.updateConnectFields);
 router.get("/list", cosheetController.getCoSheets);
 router.get("/list/:id", cosheetController.getCoSheetById);
