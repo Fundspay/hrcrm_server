@@ -143,10 +143,7 @@ var updateUser = async (req, res) => {
             email: email || user.email
         };
 
-        if (password) {
-            updatedFields.password = await bcrypt.hash(password, 10);
-        }
-
+    
         await user.update(updatedFields);
 
         return ReS(res, { success: true, user }, 200);
