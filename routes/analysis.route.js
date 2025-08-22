@@ -7,4 +7,8 @@ const analysisController = require("../controllers/analysis.controller");
 // GET Daily Connect Analysis
 router.get("/daily", analysisController.getDailyAnalysis);
 
+// GET /api/daily-analysis/user?userId=123
+router.get("/daily-analysis/user", analysisController.getDailyAnalysisByUser);
+
+
 module.exports = router;
