@@ -161,14 +161,29 @@ module.exports.updateConnectFields = updateConnectFields;
 // Get All CoSheets
 const getCoSheets = async (req, res) => {
   try {
+    // Fetch all CoSheets
     const records = await model.CoSheet.findAll();
-    return ReS(res, { success: true, data: records }, 200);
+
+    // Fetch all registered users
+    const users = await model.User.findAll({
+      where: { isActive: true, isDeleted: false },
+      attributes: ["id", "firstName", "lastName", "email"],
+      order: [["firstName", "ASC"]],
+    });
+
+    return ReS(res, {
+      success: true,
+      data: records,
+      users, // added field with all registered users
+    }, 200);
   } catch (error) {
     console.error("CoSheet Fetch All Error:", error);
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.getCoSheets = getCoSheets;
+
 
 // Get Single CoSheet by ID
 const getCoSheetById = async (req, res) => {

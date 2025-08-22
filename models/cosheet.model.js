@@ -43,9 +43,9 @@ module.exports = (sequelize, Sequelize) => {
     CoSheet.associate = function (models) {
         CoSheet.belongsTo(models.User, {
             foreignKey: "userId",
+            as: "user", // alias to fetch user details with CoSheet
             onDelete: "SET NULL",
             onUpdate: "CASCADE",
-            constraints: true,
         });
     };
 
