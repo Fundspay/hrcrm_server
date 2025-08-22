@@ -103,13 +103,13 @@ module.exports.deleteTarget = deleteTarget;
 // ✅ Fetch all targets for a specific user
 var getTargetsByUser = async function (req, res) {
     try {
-        const { userId } = req.query;
+        const { userId } = req.params;
         if (!userId) return ReE(res, "userId is required", 400);
 
         const targets = await model.MyTarget.findAll({
             where: { userId },
             include: [
-                { model: model.User, attributes: ["id", "name", "email"] },
+                { model: model.User, attributes: ["id"] },
                 { model: model.CoSheet, attributes: ["id", "collegeName"] }
             ]
         });
@@ -122,13 +122,12 @@ var getTargetsByUser = async function (req, res) {
     }
 };
 module.exports.getTargetsByUser = getTargetsByUser;
-
-// ✅ Upsert target: create new or update existing
+// ✅ Upsert target: update fields if exists, otherwise create
 var upsertTarget = async function (req, res) {
-    let { userId, jds, calls } = req.body;
-    if (!userId) return ReE(res, "userId is required", 400);
-
     try {
+        let { userId, jds, calls } = req.body;
+        if (!userId) return ReE(res, "userId is required", 400);
+
         // Find the latest CoSheet for the user
         const coSheet = await model.CoSheet.findOne({
             where: { userId },
@@ -137,20 +136,20 @@ var upsertTarget = async function (req, res) {
 
         if (!coSheet) return ReE(res, "No CoSheet found for this user", 404);
 
-        // Check if a target already exists for this CoSheet
+        // Check if a target already exists for this user + CoSheet
         let target = await model.MyTarget.findOne({
-            where: { userId, coSheetId: coSheet.id },
+            where: { userId: userId, coSheetId: coSheet.id },
         });
 
         if (target) {
-            // ✅ Update existing target
-            await target.update({
-                jds: jds !== undefined ? jds : target.jds,
-                calls: calls !== undefined ? calls : target.calls,
-            });
+            // ✅ Update only the passed fields
+            if (jds !== undefined) target.jds = jds;
+            if (calls !== undefined) target.calls = calls;
+
+            await target.save(); // persists changes
             return ReS(res, { message: "Target updated successfully", data: target }, 200);
         } else {
-            // ✅ Create new target
+            // ✅ Create new target if not found
             target = await model.MyTarget.create({
                 userId,
                 coSheetId: coSheet.id,
@@ -160,6 +159,7 @@ var upsertTarget = async function (req, res) {
             return ReS(res, { message: "Target created successfully", data: target }, 201);
         }
     } catch (error) {
+        console.error("Upsert error:", error);
         return ReE(res, error.message, 500);
     }
 };

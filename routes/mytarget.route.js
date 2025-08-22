@@ -9,7 +9,7 @@ router.get("/list", myTargetController.fetchAllTargets);
 router.get("/list/:id", myTargetController.fetchTargetById);
 router.put("/update/:id", myTargetController.updateTarget);
 router.delete("/delete/:id", myTargetController.deleteTarget);
-router.get("/fetch/user/:id", myTargetController.getTargetsByUser);
+router.get("/fetch/user/:userId", myTargetController.getTargetsByUser);
 router.post("/upsert", myTargetController.upsertTarget);
 
 module.exports = router;
