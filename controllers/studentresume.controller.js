@@ -16,7 +16,7 @@ const createResume = async (req, res) => {
     const results = await Promise.all(
       dataArray.map(async (data) => {
         try {
-          const userId = data.UserId ?? req.user?.id;
+          const userId = data.userId ?? req.user?.id;
           if (!userId) {
             return { success: false, error: "UserId is required" };
           }
@@ -49,7 +49,7 @@ const createResume = async (req, res) => {
             interviewDate: data.interviewDate ?? null,
             Dateofonboarding: data.Dateofonboarding ?? null,
             coSheetId,
-            UserId: userId,
+            userId: userId,
           };
 
           const record = await model.StudentResume.create(payload);
@@ -102,9 +102,9 @@ const updateResume = async (req, res) => {
       }
     }
 
-    // ✅ If UserId updated, recalculate coSheetId
-    if (updates.UserId) {
-      const coSheet = await model.CoSheet.findOne({ where: { userId: updates.UserId } });
+    // ✅ If userId updated, recalculate coSheetId
+    if (updates.userId) {
+      const coSheet = await model.CoSheet.findOne({ where: { userId: updates.userId } });
       updates.coSheetId = coSheet ? coSheet.id : null;
     }
 
@@ -128,7 +128,7 @@ const listResumes = async (req, res) => {
     const records = await model.StudentResume.findAll({
       include: [
         { model: model.CoSheet, attributes: ["id", "collegeName"] },
-        { model: model.User, attributes: ["id", "name", "email"] },
+        { model: model.User, attributes: ["id"] },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -149,10 +149,10 @@ const listResumesByUserId = async (req, res) => {
     if (!userId) return ReE(res, "UserId is required", 400);
 
     const records = await model.StudentResume.findAll({
-      where: { UserId: userId },
+      where: { userId: userId },
       include: [
-        { model: model.CoSheet, attributes: ["id", "collegeName"] },
-        { model: model.User, attributes: ["id", "name", "email"] },
+        { model: model.CoSheet, attributes: ["id"] },
+        { model: model.User, attributes: ["id"] },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -189,14 +189,8 @@ const getCollegeAnalysis = async (req, res) => {
 
     // Join StudentResume with CoSheet (only to fetch resumeDate)
     const resumes = await model.StudentResume.findAll({
-      include: [
-        {
-          model: model.CoSheet,
-          attributes: ["resumeDate"], // only resumeDate needed
-        },
-      ],
-      where: { UserId: userId },
-      attributes: ["id", "studentName", "collegeName", "interviewDate"],
+      where: { userId: userId },
+      attributes: ["id", "studentName", "collegeName", "interviewDate","resumeDate"],
       order: [["collegeName", "ASC"]],
     });
 
@@ -219,8 +213,8 @@ const getCollegeAnalysis = async (req, res) => {
       grouped[college].numberOfStudentResumes += 1;
 
       // ✅ resumeDate from CoSheet
-      if (r.CoSheet?.resumeDate) {
-        const formatted = new Date(r.CoSheet.resumeDate).toLocaleDateString("en-GB");
+      if (r.resumeDate) {
+        const formatted = new Date(r.resumeDate).toLocaleDateString("en-GB");
         if (!grouped[college].resumeDates.includes(formatted)) {
           grouped[college].resumeDates.push(formatted);
         }
@@ -260,17 +254,22 @@ const getDailyCalendarAnalysis = async (req, res) => {
     }
 
     // Default date range → current month
-    let startDate = fromDate ? new Date(fromDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    let endDate = toDate ? new Date(toDate) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    let startDate = fromDate
+      ? new Date(fromDate)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    let endDate = toDate
+      ? new Date(toDate)
+      : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
 
     // ✅ Fetch resumes (from StudentResume)
-    const resumes = await StudentResume.findAll({
+    const resumes = await model.StudentResume.findAll({
       where: {
         userId,
         resumeDate: { [Op.between]: [startDate, endDate] }
       },
       attributes: [
-        [fn("DATE", col("resumeDate")), "date"],
+        [literal(`DATE("resumeDate")`), "date"], // ✅ force DB DATE, no timezone shift
         "collegeName",
         [fn("COUNT", col("id")), "resumeCount"]
       ],
@@ -279,13 +278,13 @@ const getDailyCalendarAnalysis = async (req, res) => {
     });
 
     // ✅ Fetch interviews (from StudentResume)
-    const interviews = await StudentResume.findAll({
+    const interviews = await model.StudentResume.findAll({
       where: {
         userId,
         interviewDate: { [Op.between]: [startDate, endDate] }
       },
       attributes: [
-        [fn("DATE", col("interviewDate")), "date"],
+        [literal(`DATE("interviewDate")`), "date"], // ✅ force DB DATE
         "collegeName",
         [fn("COUNT", col("id")), "interviewCount"]
       ],
@@ -301,7 +300,7 @@ const getDailyCalendarAnalysis = async (req, res) => {
       if (!map[date]) {
         map[date] = {
           date,
-          day: new Date(date).toLocaleDateString("en-US", { weekday: "long" }),
+          day: new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }), // ✅ fix timezone shift
           resumesReceived: 0,
           resumesColleges: [],
           interviewsScheduled: 0,
@@ -309,7 +308,9 @@ const getDailyCalendarAnalysis = async (req, res) => {
         };
       }
       map[date].resumesReceived += parseInt(r.resumeCount);
-      map[date].resumesColleges.push(`${map[date].resumesColleges.length + 1}. ${r.collegeName} (${r.resumeCount})`);
+      map[date].resumesColleges.push(
+        `${map[date].resumesColleges.length + 1}. ${r.collegeName} (${r.resumeCount})`
+      );
     });
 
     interviews.forEach(i => {
@@ -317,7 +318,7 @@ const getDailyCalendarAnalysis = async (req, res) => {
       if (!map[date]) {
         map[date] = {
           date,
-          day: new Date(date).toLocaleDateString("en-US", { weekday: "long" }),
+          day: new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }), // ✅ fix timezone shift
           resumesReceived: 0,
           resumesColleges: [],
           interviewsScheduled: 0,
@@ -325,14 +326,17 @@ const getDailyCalendarAnalysis = async (req, res) => {
         };
       }
       map[date].interviewsScheduled += parseInt(i.interviewCount);
-      map[date].interviewsColleges.push(`${map[date].interviewsColleges.length + 1}. ${i.collegeName} (${i.interviewCount})`);
+      map[date].interviewsColleges.push(
+        `${map[date].interviewsColleges.length + 1}. ${i.collegeName} (${i.interviewCount})`
+      );
     });
 
     // ✅ Convert map → sorted array
-    const result = Object.values(map).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const result = Object.values(map).sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
 
     return res.json({ success: true, data: result });
-
   } catch (err) {
     console.error("Error in Daily Calendar Analysis:", err);
     return res.status(500).json({ success: false, error: err.message });
@@ -340,6 +344,7 @@ const getDailyCalendarAnalysis = async (req, res) => {
 };
 
 module.exports.getDailyCalendarAnalysis = getDailyCalendarAnalysis;
+
 
 const getUserWorkAnalysis = async (req, res) => {
   try {
@@ -354,51 +359,54 @@ const getUserWorkAnalysis = async (req, res) => {
     }
 
     // Fetch resumes + CoSheet info
-    const resumes = await StudentResume.findAll({
+    const resumes = await model.StudentResume.findAll({
       where: whereClause,
       include: [
         {
-          model: CoSheet,
-          attributes: ["collegeName", "followUpBy", "resumeDate", "resumeCount"],
+          model: model.CoSheet,
+          attributes: ["collegeName"], // only use collegeName from CoSheet if available
         },
       ],
     });
 
-    // Group by followUpBy (user who onboarded)
+    // Group by followUpBy
     const analysis = {};
     resumes.forEach((resume) => {
-      const followupBy = resume.CoSheet?.followUpBy || "Unknown";
+      const followupBy = resume.followupBy || "Unknown";
 
       if (!analysis[followupBy]) {
         analysis[followupBy] = {
           followupBy,
-          colleges: new Map(), // use map for unique colleges
+          colleges: new Map(),
           totalResumes: 0,
-          collegeNames: [],
           onboardingDates: [],
         };
       }
 
-      // Track colleges and resumes
-      const collegeName = resume.CoSheet?.collegeName || resume.collegeName || "Unknown College";
-      const resumeDate = resume.resumeDate ? resume.resumeDate.toISOString().split("T")[0] : null;
+      // prefer CoSheet.collegeName if present, else fallback to StudentResume.collegeName
+      const collegeName =
+        resume.CoSheet?.collegeName || resume.collegeName || "Unknown College";
 
-      // If college not already added, add it
+      const resumeDate = resume.resumeDate
+        ? resume.resumeDate.toISOString().split("T")[0]
+        : null;
+
+      // since resumeCount column does not exist, default each row to 1
+      const resumeCount = 1;
+
+      // increment counts
       if (!analysis[followupBy].colleges.has(collegeName)) {
         analysis[followupBy].colleges.set(collegeName, 0);
       }
-
-      // Increment resume count for that college
       analysis[followupBy].colleges.set(
         collegeName,
-        analysis[followupBy].colleges.get(collegeName) + 1
+        analysis[followupBy].colleges.get(collegeName) + resumeCount
       );
 
-      analysis[followupBy].totalResumes += 1;
+      analysis[followupBy].totalResumes += resumeCount;
 
-      // Collect onboarding date (resumeDate from CoSheet/StudentResume)
       if (resumeDate) {
-        analysis[followupBy].onboardingDates.push(`${resumeDate} (${1})`);
+        analysis[followupBy].onboardingDates.push(`${resumeDate} (${resumeCount})`);
       }
     });
 
@@ -411,7 +419,7 @@ const getUserWorkAnalysis = async (req, res) => {
       collegeName: Array.from(item.colleges.entries()).map(
         ([name, count], idx) => `${idx + 1}. ${name} (${count})`
       ),
-      dateOfOnboarding: [...new Set(item.onboardingDates)], // unique dates
+      dateOfOnboarding: [...new Set(item.onboardingDates)],
     }));
 
     return res.json({ success: true, data: result });
@@ -422,7 +430,6 @@ const getUserWorkAnalysis = async (req, res) => {
 };
 
 module.exports.getUserWorkAnalysis = getUserWorkAnalysis;
-
 
 
 const getRAnalysis = async (req, res) => {
@@ -436,10 +443,10 @@ const getRAnalysis = async (req, res) => {
       };
     }
 
-    // Fetch resumes + their CoSheet info
-    const resumes = await StudentResume.findAll({
+    // Fetch resumes + CoSheet info
+    const resumes = await model.StudentResume.findAll({
       where: whereClause,
-      include: [{ model: CoSheet, attributes: ["collegeName", "followUpBy"] }],
+      include: [{ model: model.CoSheet, attributes: ["collegeName"] }],
     });
 
     // Totals
@@ -447,31 +454,39 @@ const getRAnalysis = async (req, res) => {
     const totalInterviews = resumes.filter((r) => r.interviewDate).length;
 
     // College responses (unique colleges that submitted resumes)
-    const collegeSet = new Set(resumes.map((r) => r.CoSheet?.collegeName || r.collegeName));
+    const collegeSet = new Set(
+      resumes.map((r) => r.CoSheet?.collegeName || r.collegeName || "Unknown College")
+    );
     const totalColleges = collegeSet.size;
-
-    const avgResponsePerCollege = totalColleges > 0 ? (totalResumes / totalColleges).toFixed(1) : 0;
+    const avgResponsePerCollege =
+      totalColleges > 0 ? parseFloat((totalResumes / totalColleges).toFixed(1)) : 0;
 
     // Group by followUpBy (user wise performance)
     const userStats = {};
     resumes.forEach((r) => {
-      const user = r.CoSheet?.followUpBy || "Individual";
-
-      if (!userStats[user]) userStats[user] = 0;
-      userStats[user] += 1;
+      const user = r.followupBy || "Individual";
+      userStats[user] = (userStats[user] || 0) + 1;
     });
 
     // Sort users by performance
     const sortedUsers = Object.entries(userStats).sort((a, b) => b[1] - a[1]);
 
-    const topPerformers = sortedUsers.slice(0, 3).map(
-      ([name, count], idx) => `${idx + 1}. ${name} (${count})`
-    );
-    const lowPerformers = sortedUsers.slice(-3).map(
-      ([name, count], idx) => `${idx + 1}. ${name} (${count})`
-    );
+    const topPerformers = [];
+    const lowPerformers = [];
 
-    // Final response
+    sortedUsers.forEach(([name, count], idx) => {
+      if (idx < 3) topPerformers.push(`${idx + 1}. ${name} (${count})`);
+    });
+
+    sortedUsers
+      .slice(-3)
+      .forEach(([name, count], idx) => {
+        // Only include in lowPerformers if not already in topPerformers
+        if (!topPerformers.some((s) => s.includes(name))) {
+          lowPerformers.push(`${idx + 1}. ${name} (${count})`);
+        }
+      });
+
     return res.json({
       success: true,
       data: {
