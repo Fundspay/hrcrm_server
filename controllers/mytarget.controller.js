@@ -103,13 +103,13 @@ module.exports.deleteTarget = deleteTarget;
 // ✅ Fetch all targets for a specific user
 var getTargetsByUser = async function (req, res) {
     try {
-        const { userId } = req.query;
+        const { userId } = req.params;
         if (!userId) return ReE(res, "userId is required", 400);
 
         const targets = await model.MyTarget.findAll({
             where: { userId },
             include: [
-                { model: model.User, attributes: ["id", "name", "email"] },
+                { model: model.User, attributes: ["id"] },
                 { model: model.CoSheet, attributes: ["id", "collegeName"] }
             ]
         });
