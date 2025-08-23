@@ -154,6 +154,7 @@ module.exports.getCoSheetById = getCoSheetById;
 
 
 // Send JD to college email
+// Send JD to college email
 const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
@@ -195,32 +196,27 @@ const sendJDToCollege = async (req, res) => {
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    // ===== Update JD sent timestamp =====
+    // ===== UPDATE jdSentAt in CoSheet =====
     await record.update({ jdSentAt: new Date() });
 
-    // ===== Increment jdSentCount in DailyConnectAnalysis =====
-    if (record.userId) {
-      const connectDate = record.dateOfConnect
-        ? record.dateOfConnect.toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0];
+    // ===== UPDATE or CREATE DailyConnectAnalysis =====
+    const userId = record.userId;
+    if (userId) {
+      const today = new Date();
+      const dateKey = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
-      // Find existing record
-      const analysisRecord = await model.DailyConnectAnalysis.findOne({
-        where: { userId: record.userId, date: connectDate },
+      const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
+        where: { userId, date: dateKey },
+        defaults: {
+          day: today.toLocaleString("en-US", { weekday: "long" }),
+          jdSentCount: 1,
+        },
       });
 
-      if (analysisRecord) {
-        // Increment jdSentCount if already exists
+      if (!created) {
+        // Increment jdSentCount if record already exists
         analysisRecord.jdSentCount += 1;
         await analysisRecord.save();
-      } else {
-        // Create new record if not exists
-        await model.DailyConnectAnalysis.create({
-          userId: record.userId,
-          date: connectDate,
-          day: new Date(connectDate).toLocaleString("en-US", { weekday: "long" }),
-          jdSentCount: 1,
-        });
       }
     }
 
@@ -230,7 +226,9 @@ const sendJDToCollege = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.sendJDToCollege = sendJDToCollege;
+
 
 
 
