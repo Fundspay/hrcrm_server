@@ -212,7 +212,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 
     const now = new Date();
 
-    // Default to current month
+    // Default to current month if not provided
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -224,57 +224,88 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
-    // Fetch CoSheet records for user in date range
+    // Fetch CoSheet records in range
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
-      }
+        dateOfConnect: {
+          [Op.between]: [new Date(fromDate), new Date(toDate)],
+        },
+      },
     });
 
     const totalCalls = records.length;
 
-    // Fetch user's target for the period
+    // Fetch target that overlaps with this date range
     const targetRecord = await model.MyTarget.findOne({
-      where: { userId }
+      where: {
+        userId,
+        startDate: { [Op.lte]: toDate },
+        endDate: { [Op.gte]: fromDate },
+      },
     });
 
     const targetCalls = targetRecord ? targetRecord.calls : 0;
+    const targetJds = targetRecord ? targetRecord.jds : 0;
+
     const achievedCalls = totalCalls;
     const remainingCalls = Math.max(targetCalls - achievedCalls, 0);
-    const achievementPercent = targetCalls > 0 ? ((achievedCalls / targetCalls) * 100).toFixed(2) : 0;
+    const achievementPercent =
+      targetCalls > 0
+        ? ((achievedCalls / targetCalls) * 100).toFixed(2)
+        : 0;
 
     // Count call responses
-    const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
+    const allowedCallResponses = [
+      "connected",
+      "not answered",
+      "busy",
+      "switch off",
+      "invalid",
+    ];
     const stats = {};
-    allowedCallResponses.forEach((resp) => { stats[resp] = 0; });
+    allowedCallResponses.forEach((resp) => {
+      stats[resp] = 0;
+    });
+
     records.forEach((rec) => {
       const response = (rec.callResponse || "").toLowerCase();
       if (allowedCallResponses.includes(response)) stats[response]++;
     });
+
     const percentages = {};
     allowedCallResponses.forEach((resp) => {
-      percentages[resp] = ((stats[resp] / totalCalls) * 100).toFixed(2);
+      percentages[resp] =
+        totalCalls > 0
+          ? ((stats[resp] / totalCalls) * 100).toFixed(2)
+          : "0.00";
     });
 
-    const monthLabel = new Date(fromDate).toLocaleString("en-US", { month: "long", year: "numeric" });
+    const monthLabel = new Date(fromDate).toLocaleString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
 
-    return ReS(res, {
-      success: true,
-      data: {
-        month: monthLabel,
-        fromDate,
-        toDate,
-        totalCalls,
-        targetCalls,
-        achievedCalls,
-        remainingCalls,
-        achievementPercent,
-        counts: stats,
-        percentages
-      }
-    }, 200);
-
+    return ReS(
+      res,
+      {
+        success: true,
+        data: {
+          month: monthLabel,
+          fromDate,
+          toDate,
+          totalCalls,
+          targetCalls,
+          targetJds,
+          achievedCalls,
+          remainingCalls,
+          achievementPercent,
+          counts: stats,
+          percentages,
+        },
+      },
+      200
+    );
   } catch (error) {
     console.error("Call Stats Error:", error);
     return ReE(res, error.message, 500);
@@ -282,7 +313,6 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 };
 
 module.exports.getCallStatsByUserWithTarget = getCallStatsByUserWithTarget;
-
 
 const getCallStatsAllUsers = async (req, res) => {
   try {
