@@ -283,7 +283,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
-    // Fetch CoSheet records in range
+    // Fetch CoSheet records in range (for call stats)
     const records = await model.CoSheet.findAll({
       where: {
         userId,
@@ -295,8 +295,8 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 
     const totalCalls = records.length;
 
-    // Fetch target that overlaps with this date range
-    const targetRecord = await model.MyTarget.findOne({
+    // Fetch targets that overlap with the date range
+    const targetRecords = await model.MyTarget.findAll({
       where: {
         userId,
         startDate: { [Op.lte]: toDate },
@@ -304,15 +304,14 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       },
     });
 
-    const targetCalls = targetRecord ? targetRecord.calls : 0;
-    const targetJds = targetRecord ? targetRecord.jds : 0;
+    // Sum up calls and jds from all relevant targets
+    const targetCalls = targetRecords.reduce((sum, t) => sum + (t.calls || 0), 0);
+    const targetJds = targetRecords.reduce((sum, t) => sum + (t.jds || 0), 0);
 
     const achievedCalls = totalCalls;
     const remainingCalls = Math.max(targetCalls - achievedCalls, 0);
     const achievementPercent =
-      targetCalls > 0
-        ? ((achievedCalls / targetCalls) * 100).toFixed(2)
-        : 0;
+      targetCalls > 0 ? ((achievedCalls / targetCalls) * 100).toFixed(2) : 0;
 
     // Count call responses
     const allowedCallResponses = [
@@ -335,9 +334,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
     const percentages = {};
     allowedCallResponses.forEach((resp) => {
       percentages[resp] =
-        totalCalls > 0
-          ? ((stats[resp] / totalCalls) * 100).toFixed(2)
-          : "0.00";
+        totalCalls > 0 ? ((stats[resp] / totalCalls) * 100).toFixed(2) : "0.00";
     });
 
     const monthLabel = new Date(fromDate).toLocaleString("en-US", {
@@ -372,6 +369,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 };
 
 module.exports.getCallStatsByUserWithTarget = getCallStatsByUserWithTarget;
+
 
 const getCallStatsAllUsers = async (req, res) => {
   try {
