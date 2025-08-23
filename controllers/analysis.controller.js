@@ -3,17 +3,29 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op } = require("sequelize");
 
-// GET Daily Connect Analysis (JD sent)
+// GET Daily Connect Analysis for all users (JD sent)
 const getDailyAnalysis = async (req, res) => {
   try {
-    // Fetch all CoSheets where detailedResponse contains "JD"
+    let { fromDate, toDate } = req.query;
+
+    const now = new Date();
+    if (!fromDate || !toDate) {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const formatLocalDate = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      fromDate = formatLocalDate(firstDay);
+      toDate = formatLocalDate(lastDay);
+    }
+
     const records = await model.CoSheet.findAll({
       where: {
-        detailedResponse: { [Op.iLike]: "%JD%" }
+        detailedResponse: { [Op.iLike]: "%JD%" },
+        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] },
       },
-      include: [
-        { model: model.User, attributes: ["id", "firstName", "lastName"] },
-      ],
+      include: [{ model: model.User, attributes: ["id", "firstName", "lastName"] }],
     });
 
     if (!records.length) return ReS(res, { success: true, data: [] }, 200);
@@ -28,11 +40,11 @@ const getDailyAnalysis = async (req, res) => {
       if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0 };
 
       const hrName = `${rec.User?.firstName || ""} ${rec.User?.lastName || ""}`.trim();
-      if (!hrName) return; // skip if no HR name
+      if (!hrName) return;
 
       if (!analysis[dateKey][hrName]) analysis[dateKey][hrName] = 0;
       analysis[dateKey][hrName] += 1;
-      analysis[dateKey].total += 1; // increment total JD count
+      analysis[dateKey].total += 1;
     });
 
     const result = Object.values(analysis);
@@ -44,29 +56,37 @@ const getDailyAnalysis = async (req, res) => {
   }
 };
 
-module.exports.getDailyAnalysis = getDailyAnalysis;
-
-
-// GET Daily Connect Analysis per User
+// GET Daily Connect Analysis for a particular user
 const getDailyAnalysisByUser = async (req, res) => {
   try {
-    const userId = req.params.userId; // instead of req.query
+    const userId = req.params.userId;
+    let { fromDate, toDate } = req.query;
     if (!userId) return ReE(res, "userId is required", 400);
-    
-    // Fetch CoSheets for the specific user where detailedResponse contains "JD"
+
+    const now = new Date();
+    if (!fromDate || !toDate) {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const formatLocalDate = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      fromDate = formatLocalDate(firstDay);
+      toDate = formatLocalDate(lastDay);
+    }
+
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        detailedResponse: { [Op.iLike]: "%JD%" }
+        detailedResponse: { [Op.iLike]: "%JD%" },
+        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] },
       },
-      include: [
-        { model: model.User, attributes: ["id", "firstName", "lastName"] },
-      ],
+      include: [{ model: model.User, attributes: ["id", "firstName", "lastName"] }],
     });
 
     if (!records.length) return ReS(res, { success: true, data: [] }, 200);
 
-    // Group by date
+    // ===== Group by date and count JDs =====
     const analysis = {};
     records.forEach((rec) => {
       if (!rec.dateOfConnect) return;
@@ -74,26 +94,35 @@ const getDailyAnalysisByUser = async (req, res) => {
       const dateKey = rec.dateOfConnect.toISOString().split("T")[0];
       const day = rec.dateOfConnect.toLocaleString("en-US", { weekday: "long" });
 
-      if (!analysis[dateKey]) {
-        analysis[dateKey] = {
-          date: dateKey,
-          day,
-          total: 0,
-          jdCount: 0
-        };
-      }
+      if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0, jdCount: 0 };
 
-      // Count JD for the user
       const hrName = `${rec.User?.firstName || ""} ${rec.User?.lastName || ""}`.trim() || `User ${userId}`;
 
       if (!analysis[dateKey][hrName]) analysis[dateKey][hrName] = 0;
       analysis[dateKey][hrName] += 1;
-
-      analysis[dateKey].total += 1; // total JDs for the date
-      analysis[dateKey].jdCount += 1; // total JDs for this user/date
+      analysis[dateKey].total += 1;
+      analysis[dateKey].jdCount += 1;
     });
 
-    const result = Object.values(analysis);
+    // ===== Calculate target JDs from MyTarget =====
+    const targetRecord = await model.MyTarget.findOne({
+      where: {
+        userId,
+        startDate: { [Op.lte]: toDate },
+        endDate: { [Op.gte]: fromDate },
+      },
+    });
+
+    const targetJds = targetRecord ? targetRecord.jds : 0;
+    const totalJdSent = records.length;
+    const jdAchievementPercent = targetJds > 0 ? ((totalJdSent / targetJds) * 100).toFixed(2) : 0;
+
+    const result = Object.values(analysis).map((item) => ({
+      ...item,
+      targetJds,
+      totalJdSent,
+      jdAchievementPercent,
+    }));
 
     return ReS(res, { success: true, data: result }, 200);
   } catch (error) {
@@ -102,5 +131,7 @@ const getDailyAnalysisByUser = async (req, res) => {
   }
 };
 
-module.exports.getDailyAnalysisByUser = getDailyAnalysisByUser;
-
+module.exports = {
+  getDailyAnalysis,
+  getDailyAnalysisByUser,
+};

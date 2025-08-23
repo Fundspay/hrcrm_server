@@ -21,6 +21,13 @@ module.exports = (sequelize, Sequelize) => {
       onUpdate: "CASCADE",
       constraints: true,
     });
+
+    DailyConnectAnalysis.belongsTo(models.MyTarget, {
+      foreignKey: "userId", // link by userId for target
+      targetKey: "userId",
+      onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
   };
 
   return DailyConnectAnalysis;
