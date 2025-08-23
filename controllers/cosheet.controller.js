@@ -158,11 +158,14 @@ const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
     const { cc, bcc } = req.body;
+
+    // ✅ Fetch CoSheet record
     const record = await model.CoSheet.findByPk(id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
     if (!record.emailId) return ReE(res, "No email found for this college", 400);
     if (!record.internshipType) return ReE(res, "No internshipType set for this record", 400);
 
+    // ✅ Map internship type to JD file
     const JD_MAP = {
       fulltime: "jds/fulltime.pdf",
       liveproject: "jds/liveproject.pdf",
@@ -175,6 +178,7 @@ const sendJDToCollege = async (req, res) => {
     const jdKey = JD_MAP[jdKeyType];
     if (!jdKey) return ReE(res, `No JD mapped for internshipType: ${record.internshipType}`, 400);
 
+    // ✅ Fetch JD file from S3
     const jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
 
     const subject = `Collaboration Proposal for Live Projects, Internships & Placements – FundsAudit`;
@@ -184,6 +188,7 @@ const sendJDToCollege = async (req, res) => {
       <p>JD attached for ${record.collegeName || ""}.</p>
     `;
 
+    // ✅ Send email
     const mailResponse = await sendMail(
       record.emailId,
       subject,
@@ -195,14 +200,39 @@ const sendJDToCollege = async (req, res) => {
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
+    // ✅ Update jdSentAt in CoSheet
     await record.update({ jdSentAt: new Date() });
+
+    // ✅ Update DailyConnectAnalysis (JD count) for this user & date
+    const today = new Date();
+    const dateKey = today.toISOString().split("T")[0];
+    const dayName = today.toLocaleString("en-US", { weekday: "long" });
+
+    const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
+      where: {
+        userId: record.userId,
+        date: dateKey,
+      },
+      defaults: {
+        day: dayName,
+        jdSentCount: 1,
+      },
+    });
+
+    if (!created) {
+      // Increment jdSentCount if record already exists
+      await analysisRecord.increment("jdSentCount");
+    }
+
     return ReS(res, { success: true, message: "JD sent successfully" }, 200);
   } catch (error) {
     console.error("Send JD Error:", error);
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.sendJDToCollege = sendJDToCollege;
+
 
 
 const getCallStatsByUserWithTarget = async (req, res) => {
