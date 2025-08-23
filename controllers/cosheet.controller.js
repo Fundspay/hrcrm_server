@@ -154,11 +154,11 @@ module.exports.getCoSheetById = getCoSheetById;
 
 
 // Send JD to college email
-// Send JD to college email
 const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
     const { cc, bcc } = req.body;
+
     const record = await model.CoSheet.findByPk(id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
     if (!record.emailId) return ReE(res, "No email found for this college", 400);
@@ -179,11 +179,9 @@ const sendJDToCollege = async (req, res) => {
     const jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
 
     const subject = `Collaboration Proposal for Live Projects, Internships & Placements – FundsAudit`;
-
     const html = `<p>Respected ${record.coordinatorName || "Sir/Madam"},</p>
       <p>Warm greetings from FundsAudit!</p>
-      <p>JD attached for ${record.collegeName || ""}.</p>
-    `;
+      <p>JD attached for ${record.collegeName || ""}.</p>`;
 
     const mailResponse = await sendMail(
       record.emailId,
@@ -202,21 +200,26 @@ const sendJDToCollege = async (req, res) => {
     // ===== UPDATE or CREATE DailyConnectAnalysis =====
     const userId = record.userId;
     if (userId) {
-      const today = new Date();
-      const dateKey = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // set to midnight for DATEONLY
 
-      const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
-        where: { userId, date: dateKey },
-        defaults: {
-          day: today.toLocaleString("en-US", { weekday: "long" }),
-          jdSentCount: 1,
-        },
-      });
+        const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
+          where: { userId, date: today },
+          defaults: {
+            day: today.toLocaleString("en-US", { weekday: "long" }),
+            jdSentCount: 1,
+          },
+        });
 
-      if (!created) {
-        // Increment jdSentCount if record already exists
-        analysisRecord.jdSentCount += 1;
-        await analysisRecord.save();
+        if (!created) {
+          // Increment jdSentCount if record already exists
+          analysisRecord.jdSentCount += 1;
+          await analysisRecord.save();
+        }
+      } catch (err) {
+        console.error("DailyConnectAnalysis error:", err);
+        // Don't block the main JD email sending, just log
       }
     }
 
