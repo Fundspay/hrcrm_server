@@ -25,7 +25,10 @@ const getDailyAnalysis = async (req, res) => {
         detailedResponse: { [Op.iLike]: "%JD%" },
         dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] },
       },
-      include: [{ model: model.User, attributes: ["id", "firstName", "lastName"] }],
+      include: [
+        { model: model.User, attributes: ["id", "firstName", "lastName"] },
+        { model: model.DailyConnectAnalysis, attributes: ["jdSentCount", "date"] } // fetch JD counts
+      ],
     });
 
     if (!records.length) return ReS(res, { success: true, data: [] }, 200);
@@ -37,7 +40,7 @@ const getDailyAnalysis = async (req, res) => {
       const dateKey = rec.dateOfConnect.toISOString().split("T")[0];
       const day = rec.dateOfConnect.toLocaleString("en-US", { weekday: "long" });
 
-      if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0 };
+      if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0, jdSentCount: 0 };
 
       const hrName = `${rec.User?.firstName || ""} ${rec.User?.lastName || ""}`.trim();
       if (!hrName) return;
@@ -45,6 +48,11 @@ const getDailyAnalysis = async (req, res) => {
       if (!analysis[dateKey][hrName]) analysis[dateKey][hrName] = 0;
       analysis[dateKey][hrName] += 1;
       analysis[dateKey].total += 1;
+
+      // sum JD counts if linked in DailyConnectAnalysis
+      rec.DailyConnectAnalyses?.forEach((dca) => {
+        analysis[dateKey].jdSentCount += dca.jdSentCount || 0;
+      });
     });
 
     const result = Object.values(analysis);
@@ -81,12 +89,14 @@ const getDailyAnalysisByUser = async (req, res) => {
         detailedResponse: { [Op.iLike]: "%JD%" },
         dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] },
       },
-      include: [{ model: model.User, attributes: ["id", "firstName", "lastName"] }],
+      include: [
+        { model: model.User, attributes: ["id", "firstName", "lastName"] },
+        { model: model.DailyConnectAnalysis, attributes: ["jdSentCount", "date"] } // fetch JD counts
+      ],
     });
 
     if (!records.length) return ReS(res, { success: true, data: [] }, 200);
 
-    // ===== Group by date and count JDs =====
     const analysis = {};
     records.forEach((rec) => {
       if (!rec.dateOfConnect) return;
@@ -94,7 +104,7 @@ const getDailyAnalysisByUser = async (req, res) => {
       const dateKey = rec.dateOfConnect.toISOString().split("T")[0];
       const day = rec.dateOfConnect.toLocaleString("en-US", { weekday: "long" });
 
-      if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0, jdCount: 0 };
+      if (!analysis[dateKey]) analysis[dateKey] = { date: dateKey, day, total: 0, jdCount: 0, jdSentCount: 0 };
 
       const hrName = `${rec.User?.firstName || ""} ${rec.User?.lastName || ""}`.trim() || `User ${userId}`;
 
@@ -102,9 +112,14 @@ const getDailyAnalysisByUser = async (req, res) => {
       analysis[dateKey][hrName] += 1;
       analysis[dateKey].total += 1;
       analysis[dateKey].jdCount += 1;
+
+      // sum JD counts if linked in DailyConnectAnalysis
+      rec.DailyConnectAnalyses?.forEach((dca) => {
+        analysis[dateKey].jdSentCount += dca.jdSentCount || 0;
+      });
     });
 
-    // ===== Calculate target JDs from MyTarget =====
+    // target info
     const targetRecord = await model.MyTarget.findOne({
       where: {
         userId,

@@ -195,25 +195,32 @@ const sendJDToCollege = async (req, res) => {
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    // ✅ Update JD sent timestamp
+    // ===== Update JD sent timestamp =====
     await record.update({ jdSentAt: new Date() });
 
-    // ===== Track JD count in DailyConnectAnalysis =====
+    // ===== Increment jdSentCount in DailyConnectAnalysis =====
     if (record.userId) {
-      const dateKey = new Date().toISOString().split("T")[0]; // today's date
-      const dayName = new Date().toLocaleString("en-US", { weekday: "long" });
+      const connectDate = record.dateOfConnect
+        ? record.dateOfConnect.toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0];
 
-      try {
-        const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
-          where: { userId: record.userId, date: dateKey },
-          defaults: { day: dayName, jdSentCount: 1 },
+      // Find existing record
+      const analysisRecord = await model.DailyConnectAnalysis.findOne({
+        where: { userId: record.userId, date: connectDate },
+      });
+
+      if (analysisRecord) {
+        // Increment jdSentCount if already exists
+        analysisRecord.jdSentCount += 1;
+        await analysisRecord.save();
+      } else {
+        // Create new record if not exists
+        await model.DailyConnectAnalysis.create({
+          userId: record.userId,
+          date: connectDate,
+          day: new Date(connectDate).toLocaleString("en-US", { weekday: "long" }),
+          jdSentCount: 1,
         });
-
-        if (!created) {
-          await analysisRecord.increment("jdSentCount");
-        }
-      } catch (err) {
-        console.error("Error updating DailyConnectAnalysis:", err);
       }
     }
 
@@ -223,8 +230,8 @@ const sendJDToCollege = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.sendJDToCollege = sendJDToCollege;
+
 
 
 const getCallStatsByUserWithTarget = async (req, res) => {
