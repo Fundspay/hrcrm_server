@@ -153,12 +153,12 @@ const getCoSheetById = async (req, res) => {
 module.exports.getCoSheetById = getCoSheetById;
 
 
+// Send JD to college email
 const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
-    const { cc, bcc, date } = req.body; // optional date for JD count
+    const { cc, bcc } = req.body;
     const record = await model.CoSheet.findByPk(id);
-
     if (!record) return ReE(res, "CoSheet record not found", 404);
     if (!record.emailId) return ReE(res, "No email found for this college", 400);
     if (!record.internshipType) return ReE(res, "No internshipType set for this record", 400);
@@ -195,22 +195,26 @@ const sendJDToCollege = async (req, res) => {
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    // Update jdSentAt in CoSheet
+    // ✅ Update JD sent timestamp
     await record.update({ jdSentAt: new Date() });
 
     // ===== Track JD count in DailyConnectAnalysis =====
-    const jdDate = date ? new Date(date) : new Date(); // use provided date or today
-    const dateKey = jdDate.toISOString().split("T")[0];
-    const dayName = jdDate.toLocaleString("en-US", { weekday: "long" });
+    if (record.userId) {
+      const dateKey = new Date().toISOString().split("T")[0]; // today's date
+      const dayName = new Date().toLocaleString("en-US", { weekday: "long" });
 
-    const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
-      where: { userId: record.userId, date: dateKey },
-      defaults: { day: dayName, jdSentCount: 1 },
-    });
+      try {
+        const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
+          where: { userId: record.userId, date: dateKey },
+          defaults: { day: dayName, jdSentCount: 1 },
+        });
 
-    if (!created) {
-      // Increment jdSentCount if already exists
-      await analysisRecord.increment("jdSentCount");
+        if (!created) {
+          await analysisRecord.increment("jdSentCount");
+        }
+      } catch (err) {
+        console.error("Error updating DailyConnectAnalysis:", err);
+      }
     }
 
     return ReS(res, { success: true, message: "JD sent successfully" }, 200);
@@ -221,7 +225,6 @@ const sendJDToCollege = async (req, res) => {
 };
 
 module.exports.sendJDToCollege = sendJDToCollege;
-
 
 
 const getCallStatsByUserWithTarget = async (req, res) => {
