@@ -22,6 +22,8 @@ module.exports = (sequelize, Sequelize) => {
       internshipType: { type: Sequelize.STRING, allowNull: true },
       detailedResponse: { type: Sequelize.STRING, allowNull: true },
       jdSentAt: { type: Sequelize.DATE, allowNull: true },
+      jdResponse: { type: Sequelize.STRING, allowNull: true },
+
 
       // Resume Details
       followUpBy: { type: Sequelize.STRING, allowNull: true },

@@ -154,21 +154,15 @@ module.exports.getCoSheetById = getCoSheetById;
 
 
 // Send JD to college email
-// Send JD to college email
 const sendJDToCollege = async (req, res) => {
   try {
     const { id } = req.params;
     const { cc, bcc } = req.body;
-
-    // 1️⃣ Fetch CoSheet record
     const record = await model.CoSheet.findByPk(id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
     if (!record.emailId) return ReE(res, "No email found for this college", 400);
     if (!record.internshipType) return ReE(res, "No internshipType set for this record", 400);
 
-    console.log("CoSheet record fetched:", record.id, record.collegeName, record.emailId);
-
-    // 2️⃣ Map internshipType to JD file
     const JD_MAP = {
       fulltime: "jds/fulltime.pdf",
       liveproject: "jds/liveproject.pdf",
@@ -181,85 +175,33 @@ const sendJDToCollege = async (req, res) => {
     const jdKey = JD_MAP[jdKeyType];
     if (!jdKey) return ReE(res, `No JD mapped for internshipType: ${record.internshipType}`, 400);
 
-    console.log("JD Key:", jdKey);
+    const jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
 
-    // 3️⃣ Fetch JD file from S3
-    let jdFile;
-    try {
-      jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
-      console.log("JD fetched from S3, size:", jdFile.Body.length);
-    } catch (err) {
-      console.error("S3 getObject failed:", err);
-      return ReE(res, "Failed to fetch JD file from S3", 500);
-    }
-
-    // 4️⃣ Prepare email
     const subject = `Collaboration Proposal for Live Projects, Internships & Placements – FundsAudit`;
+
     const html = `<p>Respected ${record.coordinatorName || "Sir/Madam"},</p>
       <p>Warm greetings from FundsAudit!</p>
-      <p>JD attached for ${record.collegeName || ""}.</p>`;
+      <p>JD attached for ${record.collegeName || ""}.</p>
+    `;
 
-    // 5️⃣ Send email
-    let mailResponse;
-    try {
-      console.log("Sending email to:", record.emailId);
-      mailResponse = await sendMail(
-        record.emailId,
-        subject,
-        html,
-        [{ filename: `${record.internshipType}.pdf`, content: jdFile.Body }],
-        cc,
-        bcc
-      );
-      console.log("Mail response:", mailResponse);
-    } catch (err) {
-      console.error("sendMail failed:", err);
-      return ReE(res, "Failed to send JD email", 500);
-    }
+    const mailResponse = await sendMail(
+      record.emailId,
+      subject,
+      html,
+      [{ filename: `${record.internshipType}.pdf`, content: jdFile.Body }],
+      cc,
+      bcc
+    );
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    // 6️⃣ Update jdSentAt in CoSheet
     await record.update({ jdSentAt: new Date() });
-    console.log("CoSheet jdSentAt updated");
-
-    // 7️⃣ Update or create DailyConnectAnalysis (safe)
-    const userId = record.userId;
-    if (userId) {
-      try {
-        const today = new Date();
-        const dateKey = today.toISOString().split("T")[0]; // YYYY-MM-DD
-        console.log("Updating DailyConnectAnalysis for user:", userId, "date:", dateKey);
-
-        const [analysisRecord, created] = await model.DailyConnectAnalysis.findOrCreate({
-          where: { userId, date: dateKey },
-          defaults: {
-            day: today.toLocaleString("en-US", { weekday: "long" }),
-            jdSentCount: 1,
-          },
-        });
-
-        if (!created) {
-          analysisRecord.jdSentCount += 1;
-          await analysisRecord.save();
-          console.log("DailyConnectAnalysis jdSentCount incremented");
-        } else {
-          console.log("DailyConnectAnalysis created");
-        }
-      } catch (err) {
-        console.error("DailyConnectAnalysis error:", err);
-        // don’t block main response, log only
-      }
-    }
-
     return ReS(res, { success: true, message: "JD sent successfully" }, 200);
-
   } catch (error) {
     console.error("Send JD Error:", error);
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.sendJDToCollege = sendJDToCollege;
 
 
