@@ -4,10 +4,14 @@ module.exports = (sequelize, Sequelize) => {
     "MyTarget",
     {
       id: { type: Sequelize.BIGINT, autoIncrement: true, primaryKey: true },
-      userId: { type: Sequelize.BIGINT, allowNull: false }, 
-      coSheetId: { type: Sequelize.BIGINT, allowNull: false }, 
+      userId: { type: Sequelize.BIGINT, allowNull: false },
+      coSheetId: { type: Sequelize.BIGINT, allowNull: false },
       jds: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       calls: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+
+      startDate: { type: Sequelize.DATEONLY, allowNull: true },
+      endDate: { type: Sequelize.DATEONLY, allowNull: true },
+
       createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
     },
@@ -15,7 +19,6 @@ module.exports = (sequelize, Sequelize) => {
   );
 
   MyTarget.associate = function (models) {
-    // Association with User
     MyTarget.belongsTo(models.User, {
       foreignKey: "userId",
       onDelete: "CASCADE",
@@ -23,7 +26,6 @@ module.exports = (sequelize, Sequelize) => {
       constraints: true,
     });
 
-    // Association with CoSheet
     MyTarget.belongsTo(models.CoSheet, {
       foreignKey: "coSheetId",
       onDelete: "CASCADE",
