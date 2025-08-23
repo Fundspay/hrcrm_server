@@ -10,4 +10,8 @@ router.post("/upsert", analysisController.upsertInterviewAnalysis);
 // Fetch all analysis
 router.get("/list", analysisController.getAllInterviewAnalysis);
 
+// Fetch analysis by userId
+router.get("/:userId", analysisController.getInterviewAnalysisByUserId);
+
+
 module.exports = router;

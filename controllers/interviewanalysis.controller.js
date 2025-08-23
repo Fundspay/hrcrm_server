@@ -88,3 +88,62 @@ const getAllInterviewAnalysis = async (req, res) => {
   }
 };
 module.exports.getAllInterviewAnalysis = getAllInterviewAnalysis;
+
+// Fetch analysis by userId
+const getInterviewAnalysisByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // Find analysis record(s) for this user
+    const record = await model.InterviewAnalysis.findOne({
+      where: { userId },
+      include: [{ model: model.User, attributes: ["id", "firstName", "lastName"] }],
+    });
+
+    if (!record) return ReE(res, "No analysis found for this user", 404);
+
+    const r = record.toJSON();
+
+    // Fetch interviews conducted by this user
+    const interviews = await model.InterviewDetails.findAll({
+      where: { interviewedBy: r.userId },
+    });
+
+    const totalConducted = interviews.length;
+    const statusCount = {
+      selected: 0,
+      rejected: 0,
+      "on-hold": 0,
+      "not-answered": 0,
+      "not-interested": 0,
+    };
+
+    const dates = [];
+
+    interviews.forEach((i) => {
+      const status = i.finalStatus ? i.finalStatus.toLowerCase() : "not-answered";
+      if (statusCount[status] !== undefined) statusCount[status] += 1;
+
+      dates.push(i.interviewDate ? i.interviewDate.toISOString().split("T")[0] : null);
+    });
+
+    return ReS(res, {
+      success: true,
+      data: {
+        sr: r.id,
+        interviewerName: r.User ? `${r.User.firstName} ${r.User.lastName}` : null,
+        totalInterviewsAllotted: r.totalInterviewsAllotted,
+        totalInterviewsConducted: totalConducted,
+        selectionStatus: statusCount,
+        datesOfInterviews: dates.filter(d => d !== null),
+      }
+    }, 200);
+
+  } catch (error) {
+    console.error("Fetch Analysis by UserId Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+module.exports.getInterviewAnalysisByUserId = getInterviewAnalysisByUserId;
