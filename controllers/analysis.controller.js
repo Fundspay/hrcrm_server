@@ -50,9 +50,9 @@ module.exports.getDailyAnalysis = getDailyAnalysis;
 // GET Daily Connect Analysis per User
 const getDailyAnalysisByUser = async (req, res) => {
   try {
-    const { userId } = req.query;
+    const userId = req.params.userId; // instead of req.query
     if (!userId) return ReE(res, "userId is required", 400);
-
+    
     // Fetch CoSheets for the specific user where detailedResponse contains "JD"
     const records = await model.CoSheet.findAll({
       where: {

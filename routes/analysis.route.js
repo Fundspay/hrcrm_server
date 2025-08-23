@@ -8,7 +8,7 @@ const analysisController = require("../controllers/analysis.controller");
 router.get("/daily", analysisController.getDailyAnalysis);
 
 // GET /api/daily-analysis/user?userId=123
-router.get("/daily-analysis/user", analysisController.getDailyAnalysisByUser);
+router.get("/daily-analysis/:userId", analysisController.getDailyAnalysisByUser);
 
 
 module.exports = router;
