@@ -3,7 +3,7 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op } = require("sequelize");
 
-// GET Daily Analysis (planned targets + call response counts + percentages + JD stats)
+// GET Daily Analysis (planned targets + call response counts + percentages)
 const getDailyAnalysis = async (req, res) => {
   try {
     const { userId, startDate, endDate, month } = req.query;
@@ -16,14 +16,20 @@ const getDailyAnalysis = async (req, res) => {
     if (month) {
       const [year, mon] = month.split("-");
       sDate = new Date(year, mon - 1, 1);
+      sDate.setHours(0, 0, 0, 0); // start of month
       eDate = new Date(year, mon, 0);
+      eDate.setHours(23, 59, 59, 999); // end of month
     } else if (startDate && endDate) {
       sDate = new Date(startDate);
+      sDate.setHours(0, 0, 0, 0);
       eDate = new Date(endDate);
+      eDate.setHours(23, 59, 59, 999);
     } else {
       // Default: today only
       sDate = new Date(today);
+      sDate.setHours(0, 0, 0, 0);
       eDate = new Date(today);
+      eDate.setHours(23, 59, 59, 999);
     }
 
     // Generate date list
@@ -41,7 +47,7 @@ const getDailyAnalysis = async (req, res) => {
         invalid: 0,
         achievedCalls: 0,
         achievementPercent: 0,
-        jdSent: 0,           // JD sent by this user on that day
+        jdSent: 0,
         jdAchievementPercent: 0
       });
     }
@@ -93,6 +99,7 @@ const getDailyAnalysis = async (req, res) => {
           else if (resp === "invalid") d.invalid++;
         }
       });
+
       d.achievedCalls = d.connected + d.notAnswered + d.busy + d.switchOff + d.invalid;
       d.achievementPercent = d.plannedCalls > 0 ? ((d.achievedCalls / d.plannedCalls) * 100).toFixed(2) : 0;
 
