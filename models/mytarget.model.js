@@ -4,14 +4,28 @@ module.exports = (sequelize, Sequelize) => {
     "MyTarget",
     {
       id: { type: Sequelize.BIGINT, autoIncrement: true, primaryKey: true },
-      userId: { type: Sequelize.BIGINT, allowNull: false }, 
-      coSheetId: { type: Sequelize.BIGINT, allowNull: false }, 
+
+      userId: { type: Sequelize.BIGINT, allowNull: false },
+      coSheetId: { type: Sequelize.BIGINT, allowNull: false },
+
+      // Target date (unique per user)
+      targetDate: { type: Sequelize.DATEONLY, allowNull: false },
+
       jds: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       calls: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+
       createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
     },
-    { timestamps: true }
+    { 
+      timestamps: true,
+      indexes: [
+        {
+          unique: true,
+          fields: ["userId", "targetDate"] // ensures upsert works per user per day
+        }
+      ]
+    }
   );
 
   MyTarget.associate = function (models) {
