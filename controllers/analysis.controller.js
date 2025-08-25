@@ -169,29 +169,49 @@ const getConnectedCoSheetsByUser = async (req, res) => {
 
     // Fetch CoSheet records where callResponse is "connected"
     const records = await model.CoSheet.findAll({
-      where: {
-        userId,
-        callResponse: "connected",
-        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
-      },
-      attributes: [
-        "sr",
-        "collegeName",
-        "coordinatorName",
-        "mobileNumber",
-        "emailId",
-        "city",
-        "state",
-        "course",
-        "connectedBy",
-        "dateOfConnect",
-        "callResponse",
-        "internshipType",
-        "detailedResponse",
-        "jdSentAt"
-      ],
-      order: [["dateOfConnect", "ASC"]] // optional: order by date
-    });
+  where: {
+    userId,
+    callResponse: "connected",
+    dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
+  },
+  attributes: [
+    // College details
+    "id",
+    "sr",
+    "collegeName",
+    "coordinatorName",
+    "mobileNumber",
+    "emailId",
+    "city",
+    "state",
+    "course",
+
+    // Connect details
+    "connectedBy",
+    "dateOfConnect",
+    "callResponse",
+    "internshipType",
+    "detailedResponse",
+    "jdSentAt",
+
+    // Resume details
+    "followUpBy",
+    "followUpDate",
+    "followUpResponse",
+    "resumeDate",
+    "resumeCount",
+
+    // Foreign key
+    "userId",
+
+    // Flags
+    "isActive",
+    "createdAt",
+    "updatedAt"
+  ],
+  order: [["dateOfConnect", "ASC"]]
+});
+
 
     return ReS(res, {
       success: true,
