@@ -204,8 +204,6 @@ const sendJDToCollege = async (req, res) => {
 };
 module.exports.sendJDToCollege = sendJDToCollege;
 
-
-
 const getCallStatsByUserWithTarget = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -225,30 +223,37 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
-    // Fetch CoSheet records in range (for call stats)
+    // Helpers to make the date range inclusive for timestamp fields
+    const dayStart = new Date(`${fromDate}T00:00:00.000`);
+    const dayEnd   = new Date(`${toDate}T23:59:59.999`);
+
+    // Fetch CoSheet records in range (for call stats) — inclusive
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        dateOfConnect: {
-          [Op.between]: [new Date(fromDate), new Date(toDate)],
-        },
+        dateOfConnect: { [Op.between]: [dayStart, dayEnd] },
       },
     });
 
     const totalCalls = records.length;
 
-    // Fetch targets that overlap with the date range
-    const targetRecords = await model.MyTarget.findAll({
+    // Fetch the single most-recent target that overlaps the date range
+    const targetRecord = await model.MyTarget.findOne({
       where: {
         userId,
-        startDate: { [Op.lte]: toDate },
-        endDate: { [Op.gte]: fromDate },
+        [Op.and]: [
+          { startDate: { [Op.lte]: toDate } },
+          { endDate:   { [Op.gte]: fromDate } },
+        ],
       },
+      order: [
+        ['startDate', 'DESC'],
+        ['createdAt', 'DESC'],
+      ],
     });
 
-    // Sum up calls and jds from all relevant targets
-    const targetCalls = targetRecords.reduce((sum, t) => sum + (t.calls || 0), 0);
-    const targetJds = targetRecords.reduce((sum, t) => sum + (t.jds || 0), 0);
+    const targetCalls = targetRecord ? targetRecord.calls : 0;
+    const targetJds   = targetRecord ? targetRecord.jds   : 0;
 
     const achievedCalls = totalCalls;
     const remainingCalls = Math.max(targetCalls - achievedCalls, 0);
@@ -264,9 +269,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       "invalid",
     ];
     const stats = {};
-    allowedCallResponses.forEach((resp) => {
-      stats[resp] = 0;
-    });
+    allowedCallResponses.forEach((resp) => { stats[resp] = 0; });
 
     records.forEach((rec) => {
       const response = (rec.callResponse || "").toLowerCase();
@@ -311,6 +314,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 };
 
 module.exports.getCallStatsByUserWithTarget = getCallStatsByUserWithTarget;
+
 
 
 const getCallStatsAllUsers = async (req, res) => {
