@@ -3,7 +3,7 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op } = require("sequelize");
 
-// GET Daily Analysis (planned targets only)
+// GET Daily Analysis (planned targets + call response counts)
 const getDailyAnalysis = async (req, res) => {
   try {
     const { userId, startDate, endDate, month } = req.query;
@@ -31,9 +31,14 @@ const getDailyAnalysis = async (req, res) => {
     for (let d = new Date(sDate); d <= eDate; d.setDate(d.getDate() + 1)) {
       dateList.push({
         date: d.toISOString().split("T")[0],
-        day: d.toLocaleDateString("en-US", { weekday: "long" }),
+        day: d.toLocaleDateString("en-IN", { weekday: "long" }), // Indian weekday
         plannedJds: 0,
-        plannedCalls: 0
+        plannedCalls: 0,
+        connected: 0,
+        notAnswered: 0,
+        busy: 0,
+        switchOff: 0,
+        invalid: 0
       });
     }
 
@@ -45,32 +50,60 @@ const getDailyAnalysis = async (req, res) => {
       }
     });
 
-    // Merge targets into date list
-    const merged = dateList.map(d => {
-      const target = targets.find(t => {
-        if (!t.targetDate) return false; // safety check
-        const tDate = new Date(t.targetDate); // convert to Date
-        return tDate.toISOString().split("T")[0] === d.date;
-      });
+    // Fetch CoSheet records to count call responses
+    const records = await model.CoSheet.findAll({
+      where: {
+        userId,
+        dateOfConnect: { [Op.between]: [sDate, eDate] }
+      }
+    });
 
+    const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
+
+    // Merge targets and call stats into date list
+    const merged = dateList.map(d => {
+      // Merge targets
+      const target = targets.find(t => t.targetDate && new Date(t.targetDate).toISOString().split("T")[0] === d.date);
       if (target) {
         d.plannedJds = target.jds;
         d.plannedCalls = target.calls;
       }
+
+      // Merge actual call responses
+      const dayRecords = records.filter(r => r.dateOfConnect && new Date(r.dateOfConnect).toISOString().split("T")[0] === d.date);
+      dayRecords.forEach(r => {
+        const resp = (r.callResponse || "").toLowerCase();
+        if (allowedCallResponses.includes(resp)) {
+          if (resp === "connected") d.connected++;
+          else if (resp === "not answered") d.notAnswered++;
+          else if (resp === "busy") d.busy++;
+          else if (resp === "switch off") d.switchOff++;
+          else if (resp === "invalid") d.invalid++;
+        }
+      });
+
       return d;
     });
 
     // Totals
-    const totalPlannedJds = merged.reduce((sum, d) => sum + d.plannedJds, 0);
-    const totalPlannedCalls = merged.reduce((sum, d) => sum + d.plannedCalls, 0);
+    const totals = merged.reduce((sum, d) => {
+      sum.plannedJds += d.plannedJds;
+      sum.plannedCalls += d.plannedCalls;
+      sum.connected += d.connected;
+      sum.notAnswered += d.notAnswered;
+      sum.busy += d.busy;
+      sum.switchOff += d.switchOff;
+      sum.invalid += d.invalid;
+      return sum;
+    }, { plannedJds: 0, plannedCalls: 0, connected: 0, notAnswered: 0, busy: 0, switchOff: 0, invalid: 0 });
+
+    const monthLabel = new Date(sDate).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
     return ReS(res, {
       success: true,
+      month: monthLabel,
       dates: merged,
-      totals: {
-        plannedJds: totalPlannedJds,
-        plannedCalls: totalPlannedCalls
-      }
+      totals
     }, 200);
 
   } catch (error) {
