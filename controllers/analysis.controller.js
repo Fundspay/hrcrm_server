@@ -137,3 +137,65 @@ const getDailyAnalysis = async (req, res) => {
 };
 
 module.exports.getDailyAnalysis = getDailyAnalysis;
+
+// GET all connected CoSheet records for a user
+const getConnectedCoSheetsByUser = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    let { fromDate, toDate } = req.query;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    const now = new Date();
+
+    // Default to current month if dates not provided
+    if (!fromDate || !toDate) {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const formatLocalDate = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      fromDate = formatLocalDate(firstDay);
+      toDate = formatLocalDate(lastDay);
+    }
+
+    // Fetch CoSheet records where callResponse is "connected"
+    const records = await model.CoSheet.findAll({
+      where: {
+        userId,
+        callResponse: "connected",
+        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
+      },
+      attributes: [
+        "sr",
+        "collegeName",
+        "coordinatorName",
+        "mobileNumber",
+        "emailId",
+        "city",
+        "state",
+        "course",
+        "connectedBy",
+        "dateOfConnect",
+        "callResponse",
+        "internshipType",
+        "detailedResponse",
+        "jdSentAt"
+      ],
+      order: [["dateOfConnect", "ASC"]] // optional: order by date
+    });
+
+    return ReS(res, {
+      success: true,
+      total: records.length,
+      data: records
+    }, 200);
+
+  } catch (error) {
+    console.error("Get Connected CoSheets Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getConnectedCoSheetsByUser = getConnectedCoSheetsByUser;

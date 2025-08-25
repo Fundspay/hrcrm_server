@@ -10,6 +10,6 @@ router.get("/daily", analysisController.getDailyAnalysis);
 
 // If you still want a per-user analysis with optional date range
 // you can keep this, pointing to a different handler if needed
-// router.get("/daily-analysis/:userId", analysisController.getDailyAnalysisByUser);
+router.get("/connected/:userId", analysisController.getConnectedCoSheetsByUser);
 
 module.exports = router;
