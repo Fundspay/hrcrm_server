@@ -4,6 +4,7 @@ const { ReE, ReS } = require("../utils/util.service.js");
 const { sendMail } = require("../middleware/mailer.middleware");
 const AWS = require("aws-sdk");
 const { Op } = require("sequelize");
+const analysis = require("../models/analysis.model.js");
 
 
 // / configure S3
@@ -208,7 +209,7 @@ const sendJDToCollege = async (req, res) => {
     if (userId) {
       const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
-      const [analysis, created] = await model.analysis.findOrCreate({
+      const [analysis, created] = await model.DailyConnectAnalysis.findOrCreate({
         where: { userId, date: today },
         defaults: {
           day: new Date().toLocaleString("en-US", { weekday: "long" }),
