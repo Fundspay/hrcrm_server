@@ -26,7 +26,7 @@ app.use(compression());
 const corsOptions = {
   origin: "*",
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", 'Accept'],
   credentials: true,
   optionsSuccessStatus: 204
 };
