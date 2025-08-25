@@ -3,7 +3,7 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op } = require("sequelize");
 
-// GET Daily Analysis (planned targets + call response counts)
+// GET Daily Analysis (planned targets + call response counts + percentages + JD stats)
 const getDailyAnalysis = async (req, res) => {
   try {
     const { userId, startDate, endDate, month } = req.query;
@@ -38,7 +38,11 @@ const getDailyAnalysis = async (req, res) => {
         notAnswered: 0,
         busy: 0,
         switchOff: 0,
-        invalid: 0
+        invalid: 0,
+        achievedCalls: 0,
+        achievementPercent: 0,
+        jdSent: 0,           // JD sent by this user on that day
+        jdAchievementPercent: 0
       });
     }
 
@@ -50,17 +54,25 @@ const getDailyAnalysis = async (req, res) => {
       }
     });
 
-    // Fetch CoSheet records to count call responses
-    const records = await model.CoSheet.findAll({
+    // Fetch CoSheet records for calls
+    const callRecords = await model.CoSheet.findAll({
       where: {
         userId,
         dateOfConnect: { [Op.between]: [sDate, eDate] }
       }
     });
 
+    // Fetch CoSheet records for JD sent
+    const jdRecords = await model.CoSheet.findAll({
+      where: {
+        userId,
+        jdSentAt: { [Op.between]: [sDate, eDate] }
+      }
+    });
+
     const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
 
-    // Merge targets and call stats into date list
+    // Merge targets, call stats, and JD stats into date list
     const merged = dateList.map(d => {
       // Merge targets
       const target = targets.find(t => t.targetDate && new Date(t.targetDate).toISOString().split("T")[0] === d.date);
@@ -70,8 +82,8 @@ const getDailyAnalysis = async (req, res) => {
       }
 
       // Merge actual call responses
-      const dayRecords = records.filter(r => r.dateOfConnect && new Date(r.dateOfConnect).toISOString().split("T")[0] === d.date);
-      dayRecords.forEach(r => {
+      const dayCallRecords = callRecords.filter(r => r.dateOfConnect && new Date(r.dateOfConnect).toISOString().split("T")[0] === d.date);
+      dayCallRecords.forEach(r => {
         const resp = (r.callResponse || "").toLowerCase();
         if (allowedCallResponses.includes(resp)) {
           if (resp === "connected") d.connected++;
@@ -81,6 +93,13 @@ const getDailyAnalysis = async (req, res) => {
           else if (resp === "invalid") d.invalid++;
         }
       });
+      d.achievedCalls = d.connected + d.notAnswered + d.busy + d.switchOff + d.invalid;
+      d.achievementPercent = d.plannedCalls > 0 ? ((d.achievedCalls / d.plannedCalls) * 100).toFixed(2) : 0;
+
+      // Merge JD stats
+      const dayJDCount = jdRecords.filter(r => r.jdSentAt && new Date(r.jdSentAt).toISOString().split("T")[0] === d.date).length;
+      d.jdSent = dayJDCount;
+      d.jdAchievementPercent = d.plannedJds > 0 ? ((d.jdSent / d.plannedJds) * 100).toFixed(2) : 0;
 
       return d;
     });
@@ -94,8 +113,13 @@ const getDailyAnalysis = async (req, res) => {
       sum.busy += d.busy;
       sum.switchOff += d.switchOff;
       sum.invalid += d.invalid;
+      sum.achievedCalls += d.achievedCalls;
+      sum.jdSent += d.jdSent;
       return sum;
-    }, { plannedJds: 0, plannedCalls: 0, connected: 0, notAnswered: 0, busy: 0, switchOff: 0, invalid: 0 });
+    }, { plannedJds: 0, plannedCalls: 0, connected: 0, notAnswered: 0, busy: 0, switchOff: 0, invalid: 0, achievedCalls: 0, jdSent: 0 });
+
+    totals.achievementPercent = totals.plannedCalls > 0 ? ((totals.achievedCalls / totals.plannedCalls) * 100).toFixed(2) : 0;
+    totals.jdAchievementPercent = totals.plannedJds > 0 ? ((totals.jdSent / totals.plannedJds) * 100).toFixed(2) : 0;
 
     const monthLabel = new Date(sDate).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
