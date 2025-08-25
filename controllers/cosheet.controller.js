@@ -156,13 +156,15 @@ module.exports.getCoSheetById = getCoSheetById;
 // Send JD to college email
 const sendJDToCollege = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { cc, bcc } = req.body;
+    const { id } = req.params;  // CoSheet ID
+    const { cc, bcc, userId } = req.body;
+
     const record = await model.CoSheet.findByPk(id);
     if (!record) return ReE(res, "CoSheet record not found", 404);
     if (!record.emailId) return ReE(res, "No email found for this college", 400);
     if (!record.internshipType) return ReE(res, "No internshipType set for this record", 400);
 
+    // ---- JD mapping ----
     const JD_MAP = {
       fulltime: "jds/fulltime.pdf",
       liveproject: "jds/liveproject.pdf",
@@ -171,19 +173,20 @@ const sendJDToCollege = async (req, res) => {
       others: "jds/others.pdf",
     };
 
-    const jdKeyType = record.internshipType.trim().toLowerCase().replace(/\s+/g, '');
+    const jdKeyType = record.internshipType.trim().toLowerCase().replace(/\s+/g, "");
     const jdKey = JD_MAP[jdKeyType];
     if (!jdKey) return ReE(res, `No JD mapped for internshipType: ${record.internshipType}`, 400);
 
+    // ---- Fetch JD file from S3 ----
     const jdFile = await s3.getObject({ Bucket: "fundsroomhr", Key: jdKey }).promise();
 
     const subject = `Collaboration Proposal for Live Projects, Internships & Placements – FundsAudit`;
-
     const html = `<p>Respected ${record.coordinatorName || "Sir/Madam"},</p>
       <p>Warm greetings from FundsAudit!</p>
       <p>JD attached for ${record.collegeName || ""}.</p>
     `;
 
+    // ---- Send email ----
     const mailResponse = await sendMail(
       record.emailId,
       subject,
@@ -195,13 +198,37 @@ const sendJDToCollege = async (req, res) => {
 
     if (!mailResponse.success) return ReE(res, "Failed to send JD email", 500);
 
-    await record.update({ jdSentAt: new Date() });
+    // ---- Update CoSheet ----
+    await record.update({
+      jdSentAt: new Date(),
+      jdResponse: "JD sent successfully",
+    });
+
+    // ---- Store JD count per user/date ----
+    if (userId) {
+      const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+      const [analysis, created] = await model.DailyConnectAnalysis.findOrCreate({
+        where: { userId, date: today },
+        defaults: {
+          day: new Date().toLocaleString("en-US", { weekday: "long" }),
+          jdCount: 1,
+        },
+      });
+
+      if (!created) {
+        analysis.jdCount += 1;
+        await analysis.save();
+      }
+    }
+
     return ReS(res, { success: true, message: "JD sent successfully" }, 200);
   } catch (error) {
     console.error("Send JD Error:", error);
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.sendJDToCollege = sendJDToCollege;
 
 const getCallStatsByUserWithTarget = async (req, res) => {
@@ -314,7 +341,6 @@ const getCallStatsByUserWithTarget = async (req, res) => {
 };
 
 module.exports.getCallStatsByUserWithTarget = getCallStatsByUserWithTarget;
-
 
 
 const getCallStatsAllUsers = async (req, res) => {
