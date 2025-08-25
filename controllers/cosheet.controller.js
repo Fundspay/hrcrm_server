@@ -563,3 +563,24 @@ const getInternshipTypeColleges = async (req, res) => {
 };
 
 module.exports.getInternshipTypeColleges = getInternshipTypeColleges;
+
+// Delete a CoSheet row by ID
+const deleteCoSheet = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return ReE(res, "CoSheet ID is required", 400);
+
+    const record = await model.CoSheet.findByPk(id);
+    if (!record) return ReE(res, "CoSheet record not found", 404);
+
+    await record.destroy();
+    return ReS(res, { success: true, message: "CoSheet deleted successfully" }, 200);
+  } catch (error) {
+    console.error("CoSheet Delete Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.deleteCoSheet = deleteCoSheet;
+
+

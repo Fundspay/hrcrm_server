@@ -15,5 +15,7 @@ router.get("/stats/user/jd/:userId",  cosheetController.getJdStatsWithTarget);
 // router.get("/stats/user/:userId?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD", cosheetController.getJdStats);
 router.get("/internship-stats/:userId", cosheetController.getInternshipStats);
 router.get("/internship-type-colleges/:userId", cosheetController.getInternshipTypeColleges);
+// Delete CoSheet
+router.delete("/cosheet/:id", cosheetController.deleteCoSheet);
 
 module.exports = router;
