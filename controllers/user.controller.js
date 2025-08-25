@@ -219,7 +219,7 @@ const loginWithEmailPassword = async (req, res) => {
 
 module.exports.loginWithEmailPassword = loginWithEmailPassword;
 
-// ✅ Logout User
+//  Logout User
 const logoutUser = async (req, res) => {
     try {
         const { userId } = req.body; 

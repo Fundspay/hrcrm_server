@@ -24,14 +24,25 @@ app.use(compression());
 
 // ────── CORS ───────────────────────────────────────────
 const corsOptions = {
-  origin: "*",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
+
+    // Replace with your frontend URL(s)
+    const allowedOrigins = ["http://localhost:8080", "https://fundsaudit.com"];
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
   optionsSuccessStatus: 204
 };
 
-// Apply CORS globally
+// Apply globally
 app.use(cors(corsOptions));
 
 // Ensure CORS headers are always set
