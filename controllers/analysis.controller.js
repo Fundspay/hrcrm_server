@@ -250,3 +250,60 @@ const updateConnectedCoSheet = async (req, res) => {
 };
 
 module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
+
+// GET Call Response Counts per User (default: today)
+const getCallResponseCounts = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    let { fromDate, toDate } = req.query;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    const today = new Date();
+
+    // Default to today if dates not provided
+    if (!fromDate || !toDate) {
+      const formatLocalDate = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      fromDate = formatLocalDate(today);
+      toDate = formatLocalDate(today);
+    }
+
+    // Fetch CoSheet records for the user within the date range
+    const records = await model.CoSheet.findAll({
+      where: {
+        userId,
+        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
+      },
+      attributes: ["callResponse"]
+    });
+
+    // Initialize counts
+    const counts = {
+      connected: 0,
+      notAnswered: 0,
+      busy: 0,
+      switchOff: 0,
+      invalid: 0
+    };
+
+    // Count each response type
+    records.forEach(r => {
+      const resp = (r.callResponse || "").toLowerCase();
+      if (resp === "connected") counts.connected++;
+      else if (resp === "not answered") counts.notAnswered++;
+      else if (resp === "busy") counts.busy++;
+      else if (resp === "switch off") counts.switchOff++;
+      else if (resp === "invalid") counts.invalid++;
+    });
+
+    return ReS(res, { success: true, userId, counts, date: fromDate }, 200);
+
+  } catch (error) {
+    console.error("Get Call Response Counts Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getCallResponseCounts = getCallResponseCounts;

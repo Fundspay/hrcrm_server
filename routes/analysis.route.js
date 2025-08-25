@@ -15,4 +15,6 @@ router.get("/connected/:userId", analysisController.getConnectedCoSheetsByUser);
 // routes/analysis.route.js
 router.put("/connected/:id", analysisController.updateConnectedCoSheet);
 
+router.get("/counts/:userId", analysisController.getCallResponseCounts);
+
 module.exports = router;
