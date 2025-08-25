@@ -12,4 +12,7 @@ router.get("/daily", analysisController.getDailyAnalysis);
 // you can keep this, pointing to a different handler if needed
 router.get("/connected/:userId", analysisController.getConnectedCoSheetsByUser);
 
+// routes/analysis.route.js
+router.put("/connected/:id", analysisController.updateConnectedCoSheet);
+
 module.exports = router;

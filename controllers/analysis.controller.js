@@ -206,3 +206,27 @@ const getConnectedCoSheetsByUser = async (req, res) => {
 };
 
 module.exports.getConnectedCoSheetsByUser = getConnectedCoSheetsByUser;
+
+// controllers/analysis.controller.js
+const updateConnectedCoSheet = async (req, res) => {
+  try {
+    const { id } = req.params; // CoSheet record id
+    const updateData = req.body; // updated fields from frontend
+
+    if (!id) return ReE(res, "CoSheet id is required", 400);
+
+    // Update the record
+    const [updatedRows] = await model.CoSheet.update(updateData, {
+      where: { id }
+    });
+
+    if (updatedRows === 0) return ReE(res, "No record found to update", 404);
+
+    return ReS(res, { success: true, message: "Record updated successfully" }, 200);
+  } catch (error) {
+    console.error("Update Connected CoSheet Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
