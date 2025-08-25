@@ -219,27 +219,21 @@ const loginWithEmailPassword = async (req, res) => {
 
 module.exports.loginWithEmailPassword = loginWithEmailPassword;
 
-//  Logout User
 const logoutUser = async (req, res) => {
-    try {
-        const { userId } = req.body; 
+  if (req.method === "OPTIONS") return ReS(res, { success: true });
 
-        if (!userId) {
-            return ReE(res, "Missing userId", 400);
-        }
+  try {
+    const { userId } = req.body;
+    if (!userId) return ReE(res, "Missing userId", 400);
 
-        const user = await model.User.findByPk(userId);
-        if (!user || user.isDeleted) {
-            return ReE(res, "User not found", 404);
-        }
+    const user = await model.User.findByPk(userId);
+    if (!user || user.isDeleted) return ReE(res, "User not found", 404);
 
-        // Optional: track logout timestamp
-        await user.update({ lastLogoutAt: new Date() });
-
-        return ReS(res, { success: true, message: "Logged out successfully" }, 200);
-    } catch (error) {
-        console.error("Logout Error:", error);
-        return ReE(res, error.message, 500);
-    }
+    await user.update({ lastLogoutAt: new Date() });
+    return ReS(res, { success: true, message: "Logged out successfully" }, 200);
+  } catch (error) {
+    console.error("Logout Error:", error);
+    return ReE(res, error.message, 500);
+  }
 };
 module.exports.logoutUser = logoutUser;
