@@ -208,7 +208,7 @@ const sendJDToCollege = async (req, res) => {
     if (userId) {
       const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
-      const [analysis, created] = await model.DailyConnectAnalysis.findOrCreate({
+      const [analysis, created] = await model.analysis.findOrCreate({
         where: { userId, date: today },
         defaults: {
           day: new Date().toLocaleString("en-US", { weekday: "long" }),

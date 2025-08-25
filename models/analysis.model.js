@@ -7,7 +7,7 @@ module.exports = (sequelize, Sequelize) => {
       date: { type: Sequelize.DATEONLY, allowNull: false },
       day: { type: Sequelize.STRING, allowNull: false },
       userId: { type: Sequelize.BIGINT, allowNull: false }, // HR
-      jdSentCount: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      jdCount: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
     },
