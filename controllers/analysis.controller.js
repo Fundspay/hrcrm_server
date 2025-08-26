@@ -261,13 +261,17 @@ const getCoSheetsWithCounts = async (req, res) => {
 
     const today = new Date();
 
-    // Default to today if dates not provided
-    if (!fromDate || !toDate) {
+    // 👉 Only default if BOTH are missing
+    if (!fromDate && !toDate) {
       const formatLocalDate = (date) =>
         `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       fromDate = formatLocalDate(today);
       toDate = formatLocalDate(today);
     }
+
+    // 👉 If frontend sent only one, use that for both
+    if (fromDate && !toDate) toDate = fromDate;
+    if (!fromDate && toDate) fromDate = toDate;
 
     // Include full day for fromDate and toDate
     const from = new Date(fromDate);
@@ -276,12 +280,18 @@ const getCoSheetsWithCounts = async (req, res) => {
     to.setHours(23, 59, 59, 999);
 
     // Fetch all CoSheet records for the user in the date range
-    const records = await model.CoSheet.findAll({
+    const data = await model.CoSheet.findAll({
       where: {
         userId,
         dateOfConnect: { [Op.between]: [from, to] }
       },
       order: [["dateOfConnect", "ASC"]]
+    });
+
+    // Fetch all registered users (separate list)
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email", "phoneNumber"],
+      order: [["firstName", "ASC"]]
     });
 
     // Initialize counts
@@ -294,7 +304,7 @@ const getCoSheetsWithCounts = async (req, res) => {
     };
 
     // Count each response type
-    records.forEach(r => {
+    data.forEach(r => {
       const resp = (r.callResponse || "").toLowerCase();
       if (resp === "connected") counts.connected++;
       else if (resp === "not answered") counts.notAnswered++;
@@ -303,7 +313,15 @@ const getCoSheetsWithCounts = async (req, res) => {
       else if (resp === "invalid") counts.invalid++;
     });
 
-    return ReS(res, { success: true, userId, fromDate, toDate, counts, records }, 200);
+    return ReS(res, { 
+      success: true, 
+      userId, 
+      fromDate, 
+      toDate, 
+      counts, 
+      data,   
+      users   
+    }, 200);
 
   } catch (error) {
     console.error("Get CoSheet Records With Counts Error:", error);
@@ -312,4 +330,6 @@ const getCoSheetsWithCounts = async (req, res) => {
 };
 
 module.exports.getCoSheetsWithCounts = getCoSheetsWithCounts;
+
+
 
