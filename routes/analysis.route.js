@@ -8,8 +8,7 @@ const analysisController = require("../controllers/analysis.controller");
 // Example: /api/analysis/daily?userId=123&startDate=2025-08-01&endDate=2025-08-10
 router.get("/daily", analysisController.getDailyAnalysis);
 
-// If you still want a per-user analysis with optional date range
-// you can keep this, pointing to a different handler if needed
+// GET Connected CoSheets by User ID
 router.get("/connected/:userId", analysisController.getConnectedCoSheetsByUser);
 
 // routes/analysis.route.js

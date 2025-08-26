@@ -193,7 +193,7 @@ const loginWithEmailPassword = async (req, res) => {
 
         const payload = {
             user_id: user.id,
-            name: user.name,
+            name: user.firstName,
             email: user.email,
             phoneNumber: user.phoneNumber,
             photoUrl: user.photoUrl || null
