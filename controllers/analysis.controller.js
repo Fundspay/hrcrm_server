@@ -251,7 +251,7 @@ const updateConnectedCoSheet = async (req, res) => {
 
 module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
 
-// GET CoSheet records + Call Response Counts per User (default: today)
+// GET CoSheet records + Call Response Counts per User (TIMESTAMP version)
 const getCoSheetsWithCounts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -260,24 +260,22 @@ const getCoSheetsWithCounts = async (req, res) => {
     if (!userId) return ReE(res, "userId is required", 400);
 
     const today = new Date();
+    const formatLocalDate = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-    // 👉 Only default if BOTH are missing
+    // Default both if missing
     if (!fromDate && !toDate) {
-      const formatLocalDate = (date) =>
-        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       fromDate = formatLocalDate(today);
       toDate = formatLocalDate(today);
     }
 
-    // 👉 If frontend sent only one, use that for both
+    // If only one provided, copy it
     if (fromDate && !toDate) toDate = fromDate;
     if (!fromDate && toDate) fromDate = toDate;
 
-    // Include full day for fromDate and toDate
-    const from = new Date(fromDate);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(toDate);
-    to.setHours(23, 59, 59, 999);
+    // ✅ Normalize to full day range
+    const from = new Date(`${fromDate}T00:00:00.000Z`);
+    const to = new Date(`${toDate}T23:59:59.999Z`);
 
     // Fetch all CoSheet records for the user in the date range
     const data = await model.CoSheet.findAll({
@@ -313,14 +311,14 @@ const getCoSheetsWithCounts = async (req, res) => {
       else if (resp === "invalid") counts.invalid++;
     });
 
-    return ReS(res, { 
-      success: true, 
-      userId, 
-      fromDate, 
-      toDate, 
-      counts, 
-      data,   
-      users   
+    return ReS(res, {
+      success: true,
+      userId,
+      fromDate,
+      toDate,
+      counts,
+      data,
+      users
     }, 200);
 
   } catch (error) {
@@ -328,8 +326,4 @@ const getCoSheetsWithCounts = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
-
 module.exports.getCoSheetsWithCounts = getCoSheetsWithCounts;
-
-
-
