@@ -273,7 +273,7 @@ const getCoSheetsWithCounts = async (req, res) => {
     if (fromDate && !toDate) toDate = fromDate;
     if (!fromDate && toDate) fromDate = toDate;
 
-    // ✅ Normalize to full day range
+    // Normalize to full day range
     const from = new Date(`${fromDate}T00:00:00.000Z`);
     const to = new Date(`${toDate}T23:59:59.999Z`);
 
@@ -292,23 +292,34 @@ const getCoSheetsWithCounts = async (req, res) => {
       order: [["firstName", "ASC"]]
     });
 
-    // Initialize counts
+    // Initialize counts with structure (count + records)
     const counts = {
-      connected: 0,
-      notAnswered: 0,
-      busy: 0,
-      switchOff: 0,
-      invalid: 0
+      connected: { count: 0, records: [] },
+      notAnswered: { count: 0, records: [] },
+      busy: { count: 0, records: [] },
+      switchOff: { count: 0, records: [] },
+      invalid: { count: 0, records: [] }
     };
 
-    // Count each response type
+    // Bucket records into each category
     data.forEach(r => {
       const resp = (r.callResponse || "").toLowerCase();
-      if (resp === "connected") counts.connected++;
-      else if (resp === "not answered") counts.notAnswered++;
-      else if (resp === "busy") counts.busy++;
-      else if (resp === "switch off") counts.switchOff++;
-      else if (resp === "invalid") counts.invalid++;
+      if (resp === "connected") {
+        counts.connected.count++;
+        counts.connected.records.push(r);
+      } else if (resp === "not answered") {
+        counts.notAnswered.count++;
+        counts.notAnswered.records.push(r);
+      } else if (resp === "busy") {
+        counts.busy.count++;
+        counts.busy.records.push(r);
+      } else if (resp === "switch off") {
+        counts.switchOff.count++;
+        counts.switchOff.records.push(r);
+      } else if (resp === "invalid") {
+        counts.invalid.count++;
+        counts.invalid.records.push(r);
+      }
     });
 
     return ReS(res, {
@@ -317,7 +328,6 @@ const getCoSheetsWithCounts = async (req, res) => {
       fromDate,
       toDate,
       counts,
-      data,
       users
     }, 200);
 
@@ -326,4 +336,5 @@ const getCoSheetsWithCounts = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.getCoSheetsWithCounts = getCoSheetsWithCounts;
