@@ -305,7 +305,7 @@ const getCoSheetsWithCounts = async (req, res) => {
 
     // Count each response type
     data.forEach(r => {
-      const resp = (r.allowedCallResponses || "").toLowerCase();
+      const resp = (r.callResponse || "").toLowerCase();
       if (resp === "connected") counts.connected++;
       else if (resp === "not answered") counts.notAnswered++;
       else if (resp === "busy") counts.busy++;
