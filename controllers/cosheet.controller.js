@@ -257,7 +257,7 @@ const getCallStatsByUserWithTarget = async (req, res) => {
       percentages[resp] = ((stats[resp] / totalCalls) * 100).toFixed(2);
     });
 
-    const monthLabel = new Date(fromDate).toLocaleString("en-US", { month: "long", year: "numeric" });
+    const monthLabel = new Date(fromDate).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
     return ReS(res, {
       success: true,
