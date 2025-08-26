@@ -251,8 +251,8 @@ const updateConnectedCoSheet = async (req, res) => {
 
 module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
 
-// GET Call Response Counts per User (default: today)
-const getCallResponseCounts = async (req, res) => {
+// GET CoSheet records + Call Response Counts per User (default: today)
+const getCoSheetsWithCounts = async (req, res) => {
   try {
     const { userId } = req.params;
     let { fromDate, toDate } = req.query;
@@ -265,18 +265,23 @@ const getCallResponseCounts = async (req, res) => {
     if (!fromDate || !toDate) {
       const formatLocalDate = (date) =>
         `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
       fromDate = formatLocalDate(today);
       toDate = formatLocalDate(today);
     }
 
-    // Fetch CoSheet records for the user within the date range
+    // Include full day for fromDate and toDate
+    const from = new Date(fromDate);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(toDate);
+    to.setHours(23, 59, 59, 999);
+
+    // Fetch all CoSheet records for the user in the date range
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
+        dateOfConnect: { [Op.between]: [from, to] }
       },
-      attributes: ["callResponse"]
+      order: [["dateOfConnect", "ASC"]]
     });
 
     // Initialize counts
@@ -298,12 +303,13 @@ const getCallResponseCounts = async (req, res) => {
       else if (resp === "invalid") counts.invalid++;
     });
 
-    return ReS(res, { success: true, userId, counts, date: fromDate }, 200);
+    return ReS(res, { success: true, userId, fromDate, toDate, counts, records }, 200);
 
   } catch (error) {
-    console.error("Get Call Response Counts Error:", error);
+    console.error("Get CoSheet Records With Counts Error:", error);
     return ReE(res, error.message, 500);
   }
 };
 
-module.exports.getCallResponseCounts = getCallResponseCounts;
+module.exports.getCoSheetsWithCounts = getCoSheetsWithCounts;
+
