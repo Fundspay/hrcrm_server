@@ -203,7 +203,7 @@ const loginWithEmailPassword = async (req, res) => {
 
         return ReS(res, {
             user_id: user.id,
-            name: user.name,
+            name: user.firstName,
             email: user.email,
             phoneNumber: user.phoneNumber,
             photoUrl: user.photoUrl || null,
