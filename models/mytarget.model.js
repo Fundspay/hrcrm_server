@@ -6,7 +6,7 @@ module.exports = (sequelize, Sequelize) => {
       id: { type: Sequelize.BIGINT, autoIncrement: true, primaryKey: true },
 
       userId: { type: Sequelize.BIGINT, allowNull: false },
-      coSheetId: { type: Sequelize.BIGINT, allowNull: false },
+      coSheetId: { type: Sequelize.BIGINT, allowNull: true },
 
       // Target date (unique per user)
       targetDate: { type: Sequelize.DATEONLY, allowNull: false },
