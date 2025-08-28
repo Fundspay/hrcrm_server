@@ -155,8 +155,8 @@ const getConnectedCoSheetsByUser = async (req, res) => {
 
     const now = new Date();
 
-    // Default to current month if dates not provided
-    if (!fromDate || !toDate) {
+    //  Default to current month if BOTH dates not provided
+    if (!fromDate && !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
@@ -167,58 +167,70 @@ const getConnectedCoSheetsByUser = async (req, res) => {
       toDate = formatLocalDate(lastDay);
     }
 
-    // Fetch CoSheet records where callResponse is "connected"
+    //  Build where clause dynamically
+    const whereClause = {
+      userId,
+      callResponse: "connected",
+    };
+
+    if (fromDate && toDate) {
+      whereClause.dateOfConnect = { [Op.between]: [new Date(fromDate), new Date(toDate)] };
+    } else if (fromDate) {
+      whereClause.dateOfConnect = { [Op.gte]: new Date(fromDate) };
+    } else if (toDate) {
+      whereClause.dateOfConnect = { [Op.lte]: new Date(toDate) };
+    }
+
+    // Fetch CoSheet records
     const records = await model.CoSheet.findAll({
-  where: {
-    userId,
-    callResponse: "connected",
-    dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
-  },
-  attributes: [
-    // College details
-    "id",
-    "sr",
-    "collegeName",
-    "coordinatorName",
-    "mobileNumber",
-    "emailId",
-    "city",
-    "state",
-    "course",
+      where: whereClause,
+      attributes: [
+        // College details
+        "id",
+        "sr",
+        "collegeName",
+        "coordinatorName",
+        "mobileNumber",
+        "emailId",
+        "city",
+        "state",
+        "course",
 
-    // Connect details
-    "connectedBy",
-    "dateOfConnect",
-    "callResponse",
-    "internshipType",
-    "detailedResponse",
-    "jdSentAt",
+        // Connect details
+        "connectedBy",
+        "dateOfConnect",
+        "callResponse",
+        "internshipType",
+        "detailedResponse",
+        "jdSentAt",
 
-    // Resume details
-    "followUpBy",
-    "followUpDate",
-    "followUpResponse",
-    "resumeDate",
-    "resumeCount",
+        // Resume details
+        "followUpBy",
+        "followUpDate",
+        "followUpResponse",
+        "resumeDate",
+        "resumeCount",
 
-    // Foreign key
-    "userId",
+        // Foreign key
+        "userId",
 
-    // Flags
-    "isActive",
-    "createdAt",
-    "updatedAt"
-  ],
-  order: [["dateOfConnect", "ASC"]]
-});
+        // Flags
+        "isActive",
+        "createdAt",
+        "updatedAt",
+      ],
+      order: [["dateOfConnect", "ASC"]],
+    });
 
-
-    return ReS(res, {
-      success: true,
-      total: records.length,
-      data: records
-    }, 200);
-
+    return ReS(
+      res,
+      {
+        success: true,
+        total: records.length,
+        data: records,
+      },
+      200
+    );
   } catch (error) {
     console.error("Get Connected CoSheets Error:", error);
     return ReE(res, error.message, 500);
@@ -226,6 +238,7 @@ const getConnectedCoSheetsByUser = async (req, res) => {
 };
 
 module.exports.getConnectedCoSheetsByUser = getConnectedCoSheetsByUser;
+
 
 // controllers/analysis.controller.js
 const updateConnectedCoSheet = async (req, res) => {
