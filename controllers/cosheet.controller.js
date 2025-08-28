@@ -28,7 +28,14 @@ const createCoSheet = async (req, res) => {
             sr: data.collegeDetails?.sr ?? data.sr ?? null,
             collegeName: data.collegeDetails?.collegeName ?? data.collegeName ?? null,
             coordinatorName: data.collegeDetails?.coordinatorName ?? data.coordinatorName ?? null,
-            mobileNumber: data.collegeDetails?.mobileNumber ?? data.mobileNumber ?? null,
+
+            //  Always convert to string if present
+            mobileNumber: data.collegeDetails?.mobileNumber
+              ? String(data.collegeDetails.mobileNumber)
+              : data.mobileNumber
+              ? String(data.mobileNumber)
+              : null,
+
             emailId: data.collegeDetails?.emailId ?? data.emailId ?? null,
             city: data.collegeDetails?.city ?? data.city ?? null,
             state: data.collegeDetails?.state ?? data.state ?? null,
@@ -49,12 +56,12 @@ const createCoSheet = async (req, res) => {
             return { success: false, error: "userId is required" };
           }
 
-          // Check if record already exists (you can adjust uniqueness rule here)
+          // Also convert to string in the duplicate check
           const existing = await model.CoSheet.findOne({
             where: {
               userId: payload.userId,
               collegeName: payload.collegeName,
-              mobileNumber: payload.mobileNumber,
+              mobileNumber: payload.mobileNumber ? String(payload.mobileNumber) : null,
               emailId: payload.emailId
             }
           });
@@ -81,6 +88,7 @@ const createCoSheet = async (req, res) => {
 };
 
 module.exports.createCoSheet = createCoSheet;
+
 
 
 
