@@ -1,7 +1,7 @@
 "use strict";
 const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
-const { Op } = require("sequelize");
+const { Op, fn, col } = require("sequelize");
 
 // GET Daily Analysis (planned targets + call response counts + percentages)
 const getDailyAnalysis = async (req, res) => {
@@ -252,6 +252,7 @@ const updateConnectedCoSheet = async (req, res) => {
 module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
 
 // GET CoSheet records + Call Response Counts per User (TIMESTAMP version)
+
 const getCoSheetsWithCounts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -277,7 +278,40 @@ const getCoSheetsWithCounts = async (req, res) => {
     const from = new Date(`${fromDate}T00:00:00.000Z`);
     const to = new Date(`${toDate}T23:59:59.999Z`);
 
-    // Fetch all CoSheet records for the user in the date range
+    // ✅ Fetch grouped counts directly from DB
+    const countsRaw = await model.CoSheet.findAll({
+      attributes: [
+        "callResponse",
+        [fn("COUNT", col("id")), "count"]
+      ],
+      where: {
+        userId,
+        dateOfConnect: { [Op.between]: [from, to] }
+      },
+      group: ["callResponse"]
+    });
+
+    // Convert DB response into a structured object
+    const counts = {
+      connected: 0,
+      notAnswered: 0,
+      busy: 0,
+      switchOff: 0,
+      invalid: 0
+    };
+
+    countsRaw.forEach(row => {
+      const resp = (row.callResponse || "").toLowerCase();
+      const count = parseInt(row.get("count"), 10);
+
+      if (resp === "connected") counts.connected = count;
+      else if (resp === "not answered") counts.notAnswered = count;
+      else if (resp === "busy") counts.busy = count;
+      else if (resp === "switch off") counts.switchOff = count;
+      else if (resp === "invalid") counts.invalid = count;
+    });
+
+    // ✅ Fetch full data records too (if you still want them)
     const data = await model.CoSheet.findAll({
       where: {
         userId,
@@ -286,40 +320,10 @@ const getCoSheetsWithCounts = async (req, res) => {
       order: [["dateOfConnect", "ASC"]]
     });
 
-    // Fetch all registered users (separate list)
+    // ✅ Fetch users list
     const users = await model.User.findAll({
       attributes: ["id", "firstName", "lastName", "email", "phoneNumber"],
       order: [["firstName", "ASC"]]
-    });
-
-    // Initialize counts with structure (count + records)
-    const counts = {
-      connected: { count: 0, records: [] },
-      notAnswered: { count: 0, records: [] },
-      busy: { count: 0, records: [] },
-      switchOff: { count: 0, records: [] },
-      invalid: { count: 0, records: [] }
-    };
-
-    // Bucket records into each category
-    data.forEach(r => {
-      const resp = (r.callResponse || "").toLowerCase();
-      if (resp === "connected") {
-        counts.connected.count++;
-        counts.connected.records.push(r);
-      } else if (resp === "not answered") {
-        counts.notAnswered.count++;
-        counts.notAnswered.records.push(r);
-      } else if (resp === "busy") {
-        counts.busy.count++;
-        counts.busy.records.push(r);
-      } else if (resp === "switch off") {
-        counts.switchOff.count++;
-        counts.switchOff.records.push(r);
-      } else if (resp === "invalid") {
-        counts.invalid.count++;
-        counts.invalid.records.push(r);
-      }
     });
 
     return ReS(res, {
@@ -328,6 +332,7 @@ const getCoSheetsWithCounts = async (req, res) => {
       fromDate,
       toDate,
       counts,
+      data,
       users
     }, 200);
 
@@ -338,3 +343,4 @@ const getCoSheetsWithCounts = async (req, res) => {
 };
 
 module.exports.getCoSheetsWithCounts = getCoSheetsWithCounts;
+
