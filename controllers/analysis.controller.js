@@ -58,77 +58,91 @@ const getDailyAnalysis = async (req, res) => {
     });
 
     // Fetch ALL CoSheet records for this user in range
-    const callRecords = await model.CoSheet.findAll({
+    const allRecords = await model.CoSheet.findAll({
       where: {
         userId,
-        dateOfConnect: { [Op.between]: [sDate, eDate] }
-      }
-    });
-
-    // JD sent records (across ALL CoSheets for this user)
-    const jdRecords = await model.CoSheet.findAll({
-      where: {
-        userId,
-        jdSentAt: { [Op.between]: [sDate, eDate] }
+        [Op.or]: [
+          { dateOfConnect: { [Op.between]: [sDate, eDate] } },
+          { jdSentAt: { [Op.between]: [sDate, eDate] } }
+        ]
       }
     });
 
     const allowedCallResponses = ["connected", "not answered", "busy", "switch off", "invalid"];
 
     const merged = dateList.map(d => {
-      const target = targets.find(t => t.targetDate && new Date(t.targetDate).toISOString().split("T")[0] === d.date);
+      const target = targets.find(
+        t => t.targetDate && new Date(t.targetDate).toISOString().split("T")[0] === d.date
+      );
       if (target) {
         d.plannedJds = target.jds;
         d.plannedCalls = target.calls;
       }
 
-      const dayCallRecords = callRecords.filter(r => r.dateOfConnect && new Date(r.dateOfConnect).toISOString().split("T")[0] === d.date);
-      dayCallRecords.forEach(r => {
-        const resp = (r.callResponse || "").toLowerCase();
-        if (allowedCallResponses.includes(resp)) {
-          if (resp === "connected") d.connected++;
-          else if (resp === "not answered") d.notAnswered++;
-          else if (resp === "busy") d.busy++;
-          else if (resp === "switch off") d.switchOff++;
-          else if (resp === "invalid") d.invalid++;
+      const dayRecords = allRecords.filter(r => {
+        const connectDate = r.dateOfConnect ? new Date(r.dateOfConnect).toISOString().split("T")[0] : null;
+        const jdDate = r.jdSentAt ? new Date(r.jdSentAt).toISOString().split("T")[0] : null;
+        return connectDate === d.date || jdDate === d.date;
+      });
+
+      dayRecords.forEach(r => {
+        if (r.dateOfConnect) {
+          const resp = (r.callResponse || "").trim().toLowerCase();
+          if (allowedCallResponses.includes(resp)) {
+            if (resp === "connected") d.connected++;
+            else if (resp === "not answered") d.notAnswered++;
+            else if (resp === "busy") d.busy++;
+            else if (resp === "switch off") d.switchOff++;
+            else if (resp === "invalid") d.invalid++;
+          }
         }
       });
 
       d.achievedCalls = d.connected + d.notAnswered + d.busy + d.switchOff + d.invalid;
-      d.achievementPercent = d.plannedCalls > 0 ? ((d.achievedCalls / d.plannedCalls) * 100).toFixed(2) : 0;
+      d.achievementPercent =
+        d.plannedCalls > 0 ? ((d.achievedCalls / d.plannedCalls) * 100).toFixed(2) : 0;
 
-      const dayJDCount = jdRecords.filter(r => r.jdSentAt && new Date(r.jdSentAt).toISOString().split("T")[0] === d.date).length;
-      d.jdSent = dayJDCount;
-      d.jdAchievementPercent = d.plannedJds > 0 ? ((d.jdSent / d.plannedJds) * 100).toFixed(2) : 0;
+      const jdCount = dayRecords.filter(r => r.jdSentAt && new Date(r.jdSentAt).toISOString().split("T")[0] === d.date).length;
+      d.jdSent = jdCount;
+      d.jdAchievementPercent =
+        d.plannedJds > 0 ? ((d.jdSent / d.plannedJds) * 100).toFixed(2) : 0;
 
       return d;
     });
 
-    const totals = merged.reduce((sum, d) => {
-      sum.plannedJds += d.plannedJds;
-      sum.plannedCalls += d.plannedCalls;
-      sum.connected += d.connected;
-      sum.notAnswered += d.notAnswered;
-      sum.busy += d.busy;
-      sum.switchOff += d.switchOff;
-      sum.invalid += d.invalid;
-      sum.achievedCalls += d.achievedCalls;
-      sum.jdSent += d.jdSent;
-      return sum;
-    }, { plannedJds: 0, plannedCalls: 0, connected: 0, notAnswered: 0, busy: 0, switchOff: 0, invalid: 0, achievedCalls: 0, jdSent: 0 });
+    const totals = merged.reduce(
+      (sum, d) => {
+        sum.plannedJds += d.plannedJds;
+        sum.plannedCalls += d.plannedCalls;
+        sum.connected += d.connected;
+        sum.notAnswered += d.notAnswered;
+        sum.busy += d.busy;
+        sum.switchOff += d.switchOff;
+        sum.invalid += d.invalid;
+        sum.achievedCalls += d.achievedCalls;
+        sum.jdSent += d.jdSent;
+        return sum;
+      },
+      { plannedJds: 0, plannedCalls: 0, connected: 0, notAnswered: 0, busy: 0, switchOff: 0, invalid: 0, achievedCalls: 0, jdSent: 0 }
+    );
 
-    totals.achievementPercent = totals.plannedCalls > 0 ? ((totals.achievedCalls / totals.plannedCalls) * 100).toFixed(2) : 0;
-    totals.jdAchievementPercent = totals.plannedJds > 0 ? ((totals.jdSent / totals.plannedJds) * 100).toFixed(2) : 0;
+    totals.achievementPercent =
+      totals.plannedCalls > 0 ? ((totals.achievedCalls / totals.plannedCalls) * 100).toFixed(2) : 0;
+    totals.jdAchievementPercent =
+      totals.plannedJds > 0 ? ((totals.jdSent / totals.plannedJds) * 100).toFixed(2) : 0;
 
     const monthLabel = new Date(sDate).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
-    return ReS(res, {
-      success: true,
-      month: monthLabel,
-      dates: merged,
-      totals
-    }, 200);
-
+    return ReS(
+      res,
+      {
+        success: true,
+        month: monthLabel,
+        dates: merged,
+        totals
+      },
+      200
+    );
   } catch (error) {
     console.error("Daily Analysis Error:", error);
     return ReE(res, error.message, 500);
@@ -136,23 +150,21 @@ const getDailyAnalysis = async (req, res) => {
 };
 module.exports.getDailyAnalysis = getDailyAnalysis;
 
-//  Get all connected CoSheet records for a user (not just one CoSheet)
+// Get all connected CoSheet records for a user
 const getConnectedCoSheetsByUser = async (req, res) => {
   try {
     const userId = req.params.userId;
     let { fromDate, toDate } = req.query;
-
     if (!userId) return ReE(res, "userId is required", 400);
 
     const now = new Date();
-
     if (!fromDate || !toDate) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      const formatLocalDate = (date) =>
-        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
+      const formatLocalDate = date =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+          date.getDate()
+        ).padStart(2, "0")}`;
       fromDate = formatLocalDate(firstDay);
       toDate = formatLocalDate(lastDay);
     }
@@ -160,14 +172,34 @@ const getConnectedCoSheetsByUser = async (req, res) => {
     const records = await model.CoSheet.findAll({
       where: {
         userId,
-        callResponse: "connected",
+        callResponse: { [Op.iLike]: "connected" },
         dateOfConnect: { [Op.between]: [new Date(fromDate), new Date(toDate)] }
       },
       attributes: [
-        "id","sr","collegeName","coordinatorName","mobileNumber","emailId","city","state","course",
-        "connectedBy","dateOfConnect","callResponse","internshipType","detailedResponse","jdSentAt",
-        "followUpBy","followUpDate","followUpResponse","resumeDate","resumeCount",
-        "userId","isActive","createdAt","updatedAt"
+        "id",
+        "sr",
+        "collegeName",
+        "coordinatorName",
+        "mobileNumber",
+        "emailId",
+        "city",
+        "state",
+        "course",
+        "connectedBy",
+        "dateOfConnect",
+        "callResponse",
+        "internshipType",
+        "detailedResponse",
+        "jdSentAt",
+        "followUpBy",
+        "followUpDate",
+        "followUpResponse",
+        "resumeDate",
+        "resumeCount",
+        "userId",
+        "isActive",
+        "createdAt",
+        "updatedAt"
       ],
       order: [["dateOfConnect", "ASC"]]
     });
@@ -180,7 +212,7 @@ const getConnectedCoSheetsByUser = async (req, res) => {
 };
 module.exports.getConnectedCoSheetsByUser = getConnectedCoSheetsByUser;
 
-//  Update CoSheet record
+// Update CoSheet record
 const updateConnectedCoSheet = async (req, res) => {
   try {
     const { id } = req.params;
@@ -198,17 +230,18 @@ const updateConnectedCoSheet = async (req, res) => {
 };
 module.exports.updateConnectedCoSheet = updateConnectedCoSheet;
 
-//  Get CoSheet records + Call Response Counts (for ALL records of user)
+// Get CoSheet records + Call Response Counts
 const getCoSheetsWithCounts = async (req, res) => {
   try {
     const { userId } = req.params;
     let { fromDate, toDate } = req.query;
-
     if (!userId) return ReE(res, "userId is required", 400);
 
     const today = new Date();
-    const formatLocalDate = (date) =>
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const formatLocalDate = date =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+        date.getDate()
+      ).padStart(2, "0")}`;
 
     if (!fromDate && !toDate) {
       fromDate = formatLocalDate(today);
@@ -242,12 +275,23 @@ const getCoSheetsWithCounts = async (req, res) => {
     };
 
     data.forEach(r => {
-      const resp = (r.callResponse || "").toLowerCase();
-      if (resp === "connected") { counts.connected.count++; counts.connected.records.push(r); }
-      else if (resp === "not answered") { counts.notAnswered.count++; counts.notAnswered.records.push(r); }
-      else if (resp === "busy") { counts.busy.count++; counts.busy.records.push(r); }
-      else if (resp === "switch off") { counts.switchOff.count++; counts.switchOff.records.push(r); }
-      else if (resp === "invalid") { counts.invalid.count++; counts.invalid.records.push(r); }
+      const resp = (r.callResponse || "").trim().toLowerCase();
+      if (resp === "connected") {
+        counts.connected.count++;
+        counts.connected.records.push(r);
+      } else if (resp === "not answered") {
+        counts.notAnswered.count++;
+        counts.notAnswered.records.push(r);
+      } else if (resp === "busy") {
+        counts.busy.count++;
+        counts.busy.records.push(r);
+      } else if (resp === "switch off") {
+        counts.switchOff.count++;
+        counts.switchOff.records.push(r);
+      } else if (resp === "invalid") {
+        counts.invalid.count++;
+        counts.invalid.records.push(r);
+      }
     });
 
     return ReS(res, { success: true, userId, fromDate, toDate, counts, users }, 200);
