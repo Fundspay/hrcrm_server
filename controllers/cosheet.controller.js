@@ -49,6 +49,21 @@ const createCoSheet = async (req, res) => {
             return { success: false, error: "userId is required" };
           }
 
+          // Check if record already exists (you can adjust uniqueness rule here)
+          const existing = await model.CoSheet.findOne({
+            where: {
+              userId: payload.userId,
+              collegeName: payload.collegeName,
+              mobileNumber: payload.mobileNumber,
+              emailId: payload.emailId
+            }
+          });
+
+          if (existing) {
+            return { success: false, error: "Duplicate record skipped" };
+          }
+
+          // Create new record with a new ID
           const record = await model.CoSheet.create(payload);
           return { success: true, data: record };
         } catch (err) {
@@ -64,7 +79,9 @@ const createCoSheet = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.createCoSheet = createCoSheet;
+
 
 
 
