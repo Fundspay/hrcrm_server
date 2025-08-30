@@ -462,7 +462,7 @@ const getFollowUpData = async (req, res) => {
     });
 
     if (!coSheetData || coSheetData.length === 0) {
-      return ReE(res, "No follow-up data found for this userId", 404);
+      return ReE(res, "No follow-up data found for this userId", 200);
     }
 
     return ReS(res, {
