@@ -20,13 +20,10 @@ const createCoSheet = async (req, res) => {
     const dataArray = Array.isArray(req.body) ? req.body : [req.body];
     if (!dataArray.length) return ReE(res, "No data provided", 400);
 
-    let duplicateCount = 0;
-    let invalidCount = 0;
-    let nullFieldCount = 0;
-
     const duplicateDetails = [];
     const invalidDetails = [];
     const nullFieldDetails = [];
+    const validDetails = [];
 
     const results = await Promise.all(
       dataArray.map(async (data, index) => {
@@ -55,18 +52,19 @@ const createCoSheet = async (req, res) => {
           // -------------------
           // 1. Null Field Check
           // -------------------
-          const nullFields = Object.keys(payload).filter(key => payload[key] === null && key !== "userId");
+          const nullFields = Object.keys(payload).filter(
+            (key) => payload[key] === null && key !== "userId"
+          );
           if (nullFields.length > 0) {
-            nullFieldCount++;
             nullFieldDetails.push({
               row: index + 1,
               nullFields,
-              rowData: payload
+              rowData: payload,
             });
           }
 
           // -------------------
-          // 2. Invalid Data Check (basic validation)
+          // 2. Invalid Data Check
           // -------------------
           let invalidReasons = [];
 
@@ -79,13 +77,12 @@ const createCoSheet = async (req, res) => {
           }
 
           if (invalidReasons.length > 0) {
-            invalidCount++;
             invalidDetails.push({
               row: index + 1,
               reasons: invalidReasons,
-              rowData: payload
+              rowData: payload,
             });
-            return { success: false, error: invalidReasons.join(", "), data: payload };
+            return { success: false, type: "invalid", reasons: invalidReasons, data: payload };
           }
 
           // -------------------
@@ -101,48 +98,58 @@ const createCoSheet = async (req, res) => {
           const existing = await model.CoSheet.findOne({ where: whereClause });
 
           if (existing) {
-            duplicateCount++;
             duplicateDetails.push({
               row: index + 1,
               reason: "Duplicate record",
-              rowData: payload
+              rowData: payload,
             });
-            return { success: false, error: "Duplicate record skipped", data: payload };
+            return { success: false, type: "duplicate", error: "Duplicate record skipped", data: payload };
           }
 
           // -------------------
           // 4. Insert Valid Record
           // -------------------
           const record = await model.CoSheet.create(payload);
-          return { success: true, data: record };
+          validDetails.push({
+            row: index + 1,
+            rowData: record,
+          });
+          return { success: true, type: "valid", data: record };
         } catch (err) {
           console.error("Single CoSheet record create failed:", err);
-          invalidCount++;
           invalidDetails.push({
             row: index + 1,
             reasons: [err.message],
-            rowData: data
+            rowData: data,
           });
-          return { success: false, error: err.message, data };
+          return { success: false, type: "invalid", error: err.message, data };
         }
       })
     );
 
-    return ReS(res, {
-      success: true,
-      total: dataArray.length,
-      created: results.filter(r => r.success).length,
-      duplicates: duplicateCount,
-      invalid: invalidCount,
-      nullFields: nullFieldCount,
-      details: {
-        duplicates: duplicateDetails,
-        invalid: invalidDetails,
-        nullFields: nullFieldDetails
+    // -------------------
+    // Final Structured Response
+    // -------------------
+    return ReS(
+      res,
+      {
+        success: true,
+        summary: {
+          total: dataArray.length,
+          created: validDetails.length,
+          duplicates: duplicateDetails.length,
+          invalid: invalidDetails.length,
+          nullFields: nullFieldDetails.length,
+        },
+        data: {
+          duplicates: duplicateDetails,
+          invalid: invalidDetails,
+          nullFields: nullFieldDetails,
+          valid: validDetails,
+        },
       },
-      data: results
-    }, 201);
-
+      201
+    );
   } catch (error) {
     console.error("CoSheet Create Error:", error);
     return ReE(res, error.message, 500);
@@ -150,6 +157,7 @@ const createCoSheet = async (req, res) => {
 };
 
 module.exports.createCoSheet = createCoSheet;
+
 
 
 const allowedMonths = [
