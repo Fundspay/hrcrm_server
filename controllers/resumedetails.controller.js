@@ -63,7 +63,6 @@ const updateResumeFields = async (req, res) => {
 
 module.exports.updateResumeFields = updateResumeFields;
 
-// 🔹 Resume Analysis Endpoint with followUpResponse breakdown
 const getResumeAnalysis = async (req, res) => {
   try {
     const userId = req.query.userId || req.params.userId;
@@ -72,10 +71,25 @@ const getResumeAnalysis = async (req, res) => {
     const { fromDate, toDate } = req.query;
 
     const where = { userId };
+    let targetWhere = { userId };
+
     if (fromDate || toDate) {
+      // --- filter by given range
       where.resumeDate = {};
       if (fromDate) where.resumeDate[Op.gte] = new Date(fromDate);
       if (toDate) where.resumeDate[Op.lte] = new Date(toDate);
+
+      targetWhere.targetDate = {};
+      if (fromDate) targetWhere.targetDate[Op.gte] = new Date(fromDate);
+      if (toDate) targetWhere.targetDate[Op.lte] = new Date(toDate);
+    } else {
+      // --- default: today's data
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+      where.resumeDate = { [Op.between]: [startOfDay, endOfDay] };
+      targetWhere.targetDate = { [Op.between]: [startOfDay, endOfDay] };
     }
 
     const categories = [
@@ -101,26 +115,23 @@ const getResumeAnalysis = async (req, res) => {
 
     // --- Fetch Targets ---
     const targets = await model.MyTarget.findAll({
-      where: {
-        userId,
-        ...(fromDate && toDate
-          ? { targetDate: { [Op.between]: [new Date(fromDate), new Date(toDate)] } }
-          : fromDate
-            ? { targetDate: { [Op.gte]: new Date(fromDate) } }
-            : toDate
-              ? { targetDate: { [Op.lte]: new Date(toDate) } }
-              : {}),
-      },
+      where: targetWhere,
       attributes: ["targetDate", "followUps", "resumetarget"],
       raw: true,
     });
 
-    const totalFollowUpTarget = targets.reduce((sum, t) => sum + (t.followUps || 0), 0);
-    const totalResumeTarget = targets.reduce((sum, t) => sum + (t.resumetarget || 0), 0);
+    const totalFollowUpTarget = targets.reduce(
+      (sum, t) => sum + (t.followUps || 0),
+      0
+    );
+    const totalResumeTarget = targets.reduce(
+      (sum, t) => sum + (t.resumetarget || 0),
+      0
+    );
 
     // --- Aggregate results ---
     let totalAchievedFollowUps = 0; // count of follow-ups (rows where followUpBy != null)
-    let totalAchievedResumes = 0;   // sum of resumes
+    let totalAchievedResumes = 0; // sum of resumes
 
     const breakdown = {};
     categories.forEach((c) => (breakdown[c] = 0));
@@ -179,6 +190,7 @@ const getResumeAnalysis = async (req, res) => {
 };
 
 module.exports.getResumeAnalysis = getResumeAnalysis;
+
 
 // 🔹 Total Resume Analysis Endpoint (daily/monthly) with followUpBy
 const gettotalResumeAnalysis = async (req, res) => {
