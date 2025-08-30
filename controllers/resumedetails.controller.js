@@ -507,20 +507,34 @@ const getFollowUpData = async (req, res) => {
     const userId = req.query.userId || req.params.userId;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    // 🔹 Fetch all CoSheet entries where userId matches
+    // 🔹 Step 1: Get user full name
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+
+    if (!user) {
+      return ReE(res, "User not found", 404);
+    }
+
+    const fullName = `${user.firstName} ${user.lastName}`.trim();
+
+    // 🔹 Step 2: Fetch CoSheet entries with matching followUpBy
     const coSheetData = await model.CoSheet.findAll({
-      where: { userId },
+      where: {
+        userId,
+        followUpBy: { [Op.iLike]: fullName }, // case-insensitive match
+      },
       order: [["resumeDate", "ASC"]],
       raw: true,
     });
 
-    if (!coSheetData || coSheetData.length === 0) {
-      return ReE(res, "No follow-up data found for this userId", 200);
-    }
-
+    // 🔹 Step 3: If no matching data, return success with empty array
     return ReS(res, {
       success: true,
       userId,
+      followUpBy: fullName,
       totalRecords: coSheetData.length,
       data: coSheetData,
     });
