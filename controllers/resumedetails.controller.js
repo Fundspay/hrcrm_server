@@ -518,23 +518,26 @@ const getFollowUpData = async (req, res) => {
       return ReE(res, "User not found", 404);
     }
 
-    const fullName = `${user.firstName} ${user.lastName}`.trim();
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
 
-    // 🔹 Step 2: Fetch CoSheet entries with matching followUpBy
+    // 🔹 Step 2: Fetch CoSheet entries where followUpBy contains first or last name
     const coSheetData = await model.CoSheet.findAll({
       where: {
         userId,
-        followUpBy: { [Op.iLike]: fullName }, // case-insensitive match
+        [Op.or]: [
+          { followUpBy: { [Op.iLike]: `%${firstName}%` } },
+          { followUpBy: { [Op.iLike]: `%${lastName}%` } },
+        ],
       },
       order: [["resumeDate", "ASC"]],
       raw: true,
     });
 
-    // 🔹 Step 3: If no matching data, return success with empty array
     return ReS(res, {
       success: true,
       userId,
-      followUpBy: fullName,
+      followUpBy: `${firstName} ${lastName}`.trim(),
       totalRecords: coSheetData.length,
       data: coSheetData,
     });
@@ -591,3 +594,36 @@ module.exports.getNoResponse = getNoResponse;
 const getUnprofessional = (req, res) =>
   fetchCategoryData(req, res, "unprofessional");
 module.exports.getUnprofessional = getUnprofessional;
+
+const getAllPendingFollowUps = async (req, res) => {
+  try {
+    // Define the response categories to include
+    const responseCategories = [
+      "sending in 1-2 days",
+      "delayed",
+      "no response",
+      "unprofessional",
+    ];
+
+    // Fetch all CoSheet rows that match the categories
+    const coSheetData = await model.CoSheet.findAll({
+      where: {
+        followUpResponse: { [Op.in]: responseCategories },
+      },
+      order: [["resumeDate", "ASC"]],
+      raw: true,
+    });
+
+    return ReS(res, {
+      success: true,
+      totalRecords: coSheetData.length,
+      data: coSheetData,
+    });
+  } catch (error) {
+    console.error("Get All Pending FollowUps Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getAllPendingFollowUps = getAllPendingFollowUps;
+
