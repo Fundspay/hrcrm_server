@@ -21,9 +21,15 @@ const createCoSheet = async (req, res) => {
     if (!dataArray.length) return ReE(res, "No data provided", 400);
 
     let duplicateCount = 0;
+    let invalidCount = 0;
+    let nullFieldCount = 0;
+
+    const duplicateDetails = [];
+    const invalidDetails = [];
+    const nullFieldDetails = [];
 
     const results = await Promise.all(
-      dataArray.map(async (data) => {
+      dataArray.map(async (data, index) => {
         try {
           const payload = {
             sr: data.collegeDetails?.sr ?? data.sr ?? null,
@@ -46,10 +52,45 @@ const createCoSheet = async (req, res) => {
             userId: data.userId ?? req.user?.id ?? null,
           };
 
-          if (!payload.userId) {
-            return { success: false, error: "userId is required" };
+          // -------------------
+          // 1. Null Field Check
+          // -------------------
+          const nullFields = Object.keys(payload).filter(key => payload[key] === null && key !== "userId");
+          if (nullFields.length > 0) {
+            nullFieldCount++;
+            nullFieldDetails.push({
+              row: index + 1,
+              nullFields,
+              rowData: payload
+            });
           }
 
+          // -------------------
+          // 2. Invalid Data Check (basic validation)
+          // -------------------
+          let invalidReasons = [];
+
+          if (payload.mobileNumber && !/^[0-9]{10}$/.test(payload.mobileNumber)) {
+            invalidReasons.push("Invalid mobile number");
+          }
+
+          if (payload.emailId && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.emailId)) {
+            invalidReasons.push("Invalid email format");
+          }
+
+          if (invalidReasons.length > 0) {
+            invalidCount++;
+            invalidDetails.push({
+              row: index + 1,
+              reasons: invalidReasons,
+              rowData: payload
+            });
+            return { success: false, error: invalidReasons.join(", "), data: payload };
+          }
+
+          // -------------------
+          // 3. Duplicate Check
+          // -------------------
           const whereClause = {
             userId: payload.userId,
             collegeName: payload.collegeName,
@@ -61,24 +102,45 @@ const createCoSheet = async (req, res) => {
 
           if (existing) {
             duplicateCount++;
-            return { success: false, error: "Duplicate record skipped" };
+            duplicateDetails.push({
+              row: index + 1,
+              reason: "Duplicate record",
+              rowData: payload
+            });
+            return { success: false, error: "Duplicate record skipped", data: payload };
           }
 
+          // -------------------
+          // 4. Insert Valid Record
+          // -------------------
           const record = await model.CoSheet.create(payload);
           return { success: true, data: record };
         } catch (err) {
           console.error("Single CoSheet record create failed:", err);
-          return { success: false, error: err.message };
+          invalidCount++;
+          invalidDetails.push({
+            row: index + 1,
+            reasons: [err.message],
+            rowData: data
+          });
+          return { success: false, error: err.message, data };
         }
       })
     );
 
-    return ReS(res, { 
-      success: true, 
+    return ReS(res, {
+      success: true,
       total: dataArray.length,
       created: results.filter(r => r.success).length,
       duplicates: duplicateCount,
-      data: results 
+      invalid: invalidCount,
+      nullFields: nullFieldCount,
+      details: {
+        duplicates: duplicateDetails,
+        invalid: invalidDetails,
+        nullFields: nullFieldDetails
+      },
+      data: results
     }, 201);
 
   } catch (error) {
