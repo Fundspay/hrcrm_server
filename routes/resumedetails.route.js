@@ -11,5 +11,11 @@ router.get("/total-analysis/:userId", resumedetailsController.gettotalResumeAnal
 router.get("/analysis-per-cosheet/:userId", resumedetailsController.getResumeAnalysisPerCoSheet);
 router.get("/followup-totals", resumedetailsController.getFollowUpResumeTotals);
 router.get("/followup-data/:userId", resumedetailsController.getFollowUpData);
+router.get("/followups/resumes-received/:userId", resumedetailsController.getResumesReceived);
+router.get("/followups/sending-in-1-2-days/:userId", resumedetailsController.getSendingIn12Days);
+router.get("/followups/delayed/:userId", resumedetailsController.getDelayed);
+router.get("/followups/no-response/:userId", resumedetailsController.getNoResponse);
+router.get("/followups/unprofessional/:userId", resumedetailsController.getUnprofessional);
+
 
 module.exports = router;
