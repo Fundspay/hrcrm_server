@@ -20,35 +20,29 @@ const createCoSheet = async (req, res) => {
     const dataArray = Array.isArray(req.body) ? req.body : [req.body];
     if (!dataArray.length) return ReE(res, "No data provided", 400);
 
+    let duplicateCount = 0;
+
     const results = await Promise.all(
       dataArray.map(async (data) => {
         try {
           const payload = {
-            // College details
             sr: data.collegeDetails?.sr ?? data.sr ?? null,
             collegeName: data.collegeDetails?.collegeName ?? data.collegeName ?? null,
             coordinatorName: data.collegeDetails?.coordinatorName ?? data.coordinatorName ?? null,
-
-            //  Always convert to string if present
             mobileNumber: data.collegeDetails?.mobileNumber
               ? String(data.collegeDetails.mobileNumber)
               : data.mobileNumber
               ? String(data.mobileNumber)
               : null,
-
             emailId: data.collegeDetails?.emailId ?? data.emailId ?? null,
             city: data.collegeDetails?.city ?? data.city ?? null,
             state: data.collegeDetails?.state ?? data.state ?? null,
             course: data.collegeDetails?.course ?? data.course ?? null,
-
-            // Connect details
             dateOfConnect: data.connect?.dateOfConnect ?? data.dateOfConnect ?? null,
             callResponse: data.connect?.callResponse ?? data.callResponse ?? null,
             internshipType: data.connect?.internshipType ?? data.internshipType ?? null,
             detailedResponse: data.connect?.detailedResponse ?? data.detailedResponse ?? null,
             connectedBy: data.connect?.connectedBy ?? data.connectedBy ?? null,
-
-            // Foreign key to User
             userId: data.userId ?? req.user?.id ?? null,
           };
 
@@ -56,21 +50,20 @@ const createCoSheet = async (req, res) => {
             return { success: false, error: "userId is required" };
           }
 
-          // Also convert to string in the duplicate check
-          const existing = await model.CoSheet.findOne({
-            where: {
-              userId: payload.userId,
-              collegeName: payload.collegeName,
-              mobileNumber: payload.mobileNumber ? String(payload.mobileNumber) : null,
-              emailId: payload.emailId
-            }
-          });
+          const whereClause = {
+            userId: payload.userId,
+            collegeName: payload.collegeName,
+          };
+          if (payload.mobileNumber) whereClause.mobileNumber = payload.mobileNumber;
+          if (payload.emailId) whereClause.emailId = payload.emailId;
+
+          const existing = await model.CoSheet.findOne({ where: whereClause });
 
           if (existing) {
+            duplicateCount++;
             return { success: false, error: "Duplicate record skipped" };
           }
 
-          // Create new record with a new ID
           const record = await model.CoSheet.create(payload);
           return { success: true, data: record };
         } catch (err) {
@@ -80,7 +73,14 @@ const createCoSheet = async (req, res) => {
       })
     );
 
-    return ReS(res, { success: true, data: results }, 201);
+    return ReS(res, { 
+      success: true, 
+      total: dataArray.length,
+      created: results.filter(r => r.success).length,
+      duplicates: duplicateCount,
+      data: results 
+    }, 201);
+
   } catch (error) {
     console.error("CoSheet Create Error:", error);
     return ReE(res, error.message, 500);
@@ -88,9 +88,6 @@ const createCoSheet = async (req, res) => {
 };
 
 module.exports.createCoSheet = createCoSheet;
-
-
-
 
 
 const allowedMonths = [
