@@ -16,6 +16,7 @@ const updateResumeFields = async (req, res) => {
       "followUpResponse",
       "resumeDate",
       "resumeCount",
+      "expectedResponseDate"
     ];
 
     const allowedFollowUpResponses = [
@@ -69,17 +70,16 @@ const getResumeAnalysis = async (req, res) => {
 
     const { fromDate, toDate } = req.query;
 
+    // --- Step 1: Fetch CoSheet data ---
     const where = {
       userId,
-      resumeDate: { [model.Sequelize.Op.ne]: null } // exclude null dates
+      resumeDate: { [model.Sequelize.Op.ne]: null }
     };
     if (fromDate) where.resumeDate = { ...where.resumeDate, [model.Sequelize.Op.gte]: fromDate };
     if (toDate) where.resumeDate = { ...where.resumeDate, [model.Sequelize.Op.lte]: toDate };
 
-    // Allowed followUpResponses
     const categories = ["resumes received", "sending in 1-2 days", "delayed", "no response", "unprofessional"];
 
-    // Fetch grouped data
     const data = await model.CoSheet.findAll({
       where,
       attributes: [
@@ -94,10 +94,30 @@ const getResumeAnalysis = async (req, res) => {
       raw: true,
     });
 
-    // Prepare the response grouped by day
-    const analysis = [];
+    // --- Step 2: Fetch targets from MyTarget ---
+    const targetWhere = { userId };
+    if (fromDate && toDate) {
+      targetWhere.targetDate = { [model.Sequelize.Op.between]: [new Date(fromDate), new Date(toDate)] };
+    } else if (fromDate) {
+      targetWhere.targetDate = { [model.Sequelize.Op.gte]: new Date(fromDate) };
+    } else if (toDate) {
+      targetWhere.targetDate = { [model.Sequelize.Op.lte]: new Date(toDate) };
+    }
 
+    const targets = await model.MyTarget.findAll({
+      where: targetWhere,
+      attributes: ["targetDate", "followUps", "resumetarget"],
+      raw: true
+    });
+
+    const totalFollowUpTarget = targets.reduce((sum, t) => sum + (t.followUps || 0), 0);
+    const totalResumeTarget = targets.reduce((sum, t) => sum + (t.resumetarget || 0), 0);
+
+    // --- Step 3: Group CoSheet data by day ---
     const groupedByDay = {};
+    let totalAchievedFollowUps = 0;
+    let totalAchievedResumes = 0;
+
     data.forEach(d => {
       const day = d.resumeDay;
       if (!groupedByDay[day]) {
@@ -106,21 +126,44 @@ const getResumeAnalysis = async (req, res) => {
           followUpBy: d.followUpBy,
           resumeDay: day,
           totalResumes: 0,
+          achievedFollowUps: 0,
           breakdown: {}
         };
-        // initialize breakdown
         categories.forEach(c => groupedByDay[day].breakdown[c] = 0);
       }
       const responseKey = d.followUpResponse?.toLowerCase();
       if (responseKey && categories.includes(responseKey)) {
         groupedByDay[day].breakdown[responseKey] += Number(d.totalResumes);
         groupedByDay[day].totalResumes += Number(d.totalResumes);
+        groupedByDay[day].achievedFollowUps += Number(d.totalResumes); // count followUps
+        totalAchievedFollowUps += Number(d.totalResumes);
+        totalAchievedResumes += Number(d.totalResumes); // resumeCount is used for resume achievement
       }
     });
 
-    Object.keys(groupedByDay).forEach(day => analysis.push(groupedByDay[day]));
+    const analysis = Object.keys(groupedByDay).map(day => groupedByDay[day]);
 
-    return ReS(res, { success: true, analysis }, 200);
+    // --- Step 4: Calculate efficiencies ---
+    const followUpEfficiency = totalFollowUpTarget > 0
+      ? ((totalAchievedFollowUps / totalFollowUpTarget) * 100).toFixed(2)
+      : 0;
+
+    const resumeEfficiency = totalResumeTarget > 0
+      ? ((totalAchievedResumes / totalResumeTarget) * 100).toFixed(2)
+      : 0;
+
+    return ReS(res, {
+      success: true,
+      analysis,
+      totals: {
+        totalFollowUpTarget,
+        totalAchievedFollowUps,
+        followUpEfficiency: Number(followUpEfficiency),
+        totalResumeTarget,
+        totalAchievedResumes,
+        resumeEfficiency: Number(resumeEfficiency)
+      }
+    }, 200);
 
   } catch (error) {
     console.error("Resume Daily Analysis Error:", error);
