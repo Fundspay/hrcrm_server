@@ -6,13 +6,15 @@ module.exports = (sequelize, Sequelize) => {
       id: { type: Sequelize.BIGINT, autoIncrement: true, primaryKey: true },
 
       userId: { type: Sequelize.BIGINT, allowNull: false },
-      coSheetId: { type: Sequelize.BIGINT, allowNull: true },
+      // coSheetId: { type: Sequelize.BIGINT, allowNull: true },
 
       // Target date (unique per user)
       targetDate: { type: Sequelize.DATEONLY, allowNull: false },
 
       jds: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       calls: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      followUps: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      resumetarget: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
 
       createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
@@ -38,12 +40,12 @@ module.exports = (sequelize, Sequelize) => {
     });
 
     // Association with CoSheet
-    MyTarget.belongsTo(models.CoSheet, {
-      foreignKey: "coSheetId",
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
-      constraints: true,
-    });
+    // MyTarget.belongsTo(models.CoSheet, {
+    //   foreignKey: "coSheetId",
+    //   onDelete: "CASCADE",
+    //   onUpdate: "CASCADE",
+    //   constraints: true,
+    // });
   };
 
   return MyTarget;

@@ -666,3 +666,31 @@ const deleteCoSheet = async (req, res) => {
 };
 
 module.exports.deleteCoSheet = deleteCoSheet;
+
+
+// Get all CoSheets where JD has been sent
+const getCoSheetsWithJDSent = async (req, res) => {
+  try {
+    const records = await model.CoSheet.findAll({
+      where: {
+        jdSentAt: {
+          [model.Sequelize.Op.ne]: null, // jdSentAt is not null
+        },
+      },
+      order: [["jdSentAt", "DESC"]],
+    });
+
+    const users = await model.User.findAll({
+      where: { isActive: true, isDeleted: false },
+      attributes: ["id", "firstName", "lastName", "email"],
+      order: [["firstName", "ASC"]],
+    });
+
+    return ReS(res, { success: true, data: records, users }, 200);
+  } catch (error) {
+    console.error("CoSheet Fetch JD Sent Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getCoSheetsWithJDSent = getCoSheetsWithJDSent;

@@ -7,6 +7,7 @@ const cosheetController = require("../controllers/cosheet.controller");
 router.post("/add", cosheetController.createCoSheet);
 router.put("/update/:id", cosheetController.updateConnectFields);
 router.get("/list", cosheetController.getCoSheets);
+router.get("/list/jdsent", cosheetController.getCoSheetsWithJDSent);
 router.get("/list/:id", cosheetController.getCoSheetById);
 router.post("/:id/send-jd", cosheetController.sendJDToCollege);
 router.get("/stats/all", cosheetController.getCallStatsAllUsers);
@@ -17,5 +18,7 @@ router.get("/internship-stats/:userId", cosheetController.getInternshipStats);
 router.get("/internship-type-colleges/:userId", cosheetController.getInternshipTypeColleges);
 // Delete CoSheet
 router.delete("/cosheet/:id", cosheetController.deleteCoSheet);
+
+
 
 module.exports = router;

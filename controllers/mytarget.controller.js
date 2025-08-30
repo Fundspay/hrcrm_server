@@ -3,24 +3,22 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op } = require("sequelize");
 
-// Single endpoint: handles generate + fetch + totals + upsert
 var handleTargets = async function (req, res) {
   try {
     let { userId, startDate, endDate, month, targets } = req.body;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    userId = parseInt(userId, 10); // ✅ ensure bigint
-
+    userId = parseInt(userId, 10);
     const today = new Date();
 
-    // If month is provided (YYYY-MM), set start & end
+    // Handle month input
     if (month) {
       const [year, mon] = month.split("-");
       startDate = new Date(year, mon - 1, 1);
       endDate = new Date(year, mon, 0);
     }
 
-    // Default: current month
+    // Default to current month
     if (!startDate || !endDate) {
       startDate = new Date(today.getFullYear(), today.getMonth(), 1);
       endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -36,15 +34,17 @@ var handleTargets = async function (req, res) {
         date: d.toISOString().split("T")[0],
         day: d.toLocaleDateString("en-US", { weekday: "long" }),
         jds: 0,
-        calls: 0
+        calls: 0,
+        followUps: 0,
+        resumetarget: 0
       });
     }
 
-    // If frontend sends targets → upsert
+    // Upsert targets if provided
     if (targets && Array.isArray(targets)) {
       for (let t of targets) {
-        const { date, jds, calls } = t;
-        const targetDate = new Date(date); // ✅ ensure proper DATE
+        const { date, jds, calls, followUps, resumetarget } = t;
+        const targetDate = new Date(date);
 
         let existing = await model.MyTarget.findOne({
           where: { userId, targetDate },
@@ -53,14 +53,17 @@ var handleTargets = async function (req, res) {
         if (existing) {
           existing.jds = jds ?? existing.jds;
           existing.calls = calls ?? existing.calls;
+          existing.followUps = followUps ?? existing.followUps;
+          existing.resumetarget = resumetarget ?? existing.resumetarget;
           await existing.save();
         } else {
           await model.MyTarget.create({
             userId,
-            coSheetId: null, // ✅ keep null if not required
             targetDate,
             jds: jds || 0,
             calls: calls || 0,
+            followUps: followUps || 0,
+            resumetarget: resumetarget || 0
           });
         }
       }
@@ -74,35 +77,41 @@ var handleTargets = async function (req, res) {
       },
     });
 
-    // Merge existing into date list
+    // Merge existing targets into dateList
     const merged = dateList.map(d => {
-      const found = existingTargets.find(t => {
-        const tDate = new Date(t.targetDate);
-        return tDate.toISOString().split("T")[0] === d.date;
-      });
+      const found = existingTargets.find(t => new Date(t.targetDate).toISOString().split("T")[0] === d.date);
       return {
         ...d,
         jds: found ? found.jds : d.jds,
-        calls: found ? found.calls : d.calls
+        calls: found ? found.calls : d.calls,
+        followUps: found ? found.followUps : d.followUps,
+        resumetarget: found ? found.resumetarget : d.resumetarget
       };
     });
 
-    // Totals
+    // Compute totals
     const totalJds = merged.reduce((sum, t) => sum + t.jds, 0);
     const totalCalls = merged.reduce((sum, t) => sum + t.calls, 0);
+    const totalFollowUps = merged.reduce((sum, t) => sum + t.followUps, 0);
+    const totalResumeTarget = merged.reduce((sum, t) => sum + t.resumetarget, 0);
 
     return ReS(res, {
       success: true,
       dates: merged,
-      totals: { jds: totalJds, calls: totalCalls }
+      totals: {
+        jds: totalJds,
+        calls: totalCalls,
+        followUps: totalFollowUps,
+        resumetarget: totalResumeTarget
+      }
     }, 200);
 
   } catch (error) {
     return ReE(res, error.message, 500);
   }
 };
-module.exports.handleTargets = handleTargets;
 
+module.exports.handleTargets = handleTargets;
 
 // GET fetch targets for frontend
 var fetchTargets = async function (req, res) {
