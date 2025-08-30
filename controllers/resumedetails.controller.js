@@ -279,6 +279,14 @@ const gettotalResumeAnalysis = async (req, res) => {
 
 module.exports.gettotalResumeAnalysis = gettotalResumeAnalysis;
 
+// Helper to format date in local timezone
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 const getResumeAnalysisPerCoSheet = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -286,8 +294,14 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     if (!userId) return ReE(res, "userId is required", 400);
 
     const now = new Date();
-    const startDate = fromDate ? new Date(fromDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const endDate = toDate ? new Date(toDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // Default = today's date only
+    const startDate = fromDate
+      ? new Date(fromDate)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endDate = toDate
+      ? new Date(toDate)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
@@ -298,18 +312,14 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
       attributes: [
         "id",
         "followUpBy",
-        [fn("DATE", col("resumeDate")), "resumeDay"],
+        "resumeDate",
         "followUpResponse",
         [fn("SUM", col("resumeCount")), "resumeCount"],
       ],
-      group: ["id", "followUpBy", "resumeDay", "followUpResponse"],
-      order: [["id", "ASC"], ["resumeDay", "ASC"]],
+      group: ["id", "followUpBy", "resumeDate", "followUpResponse"],
+      order: [["id", "ASC"], ["resumeDate", "ASC"]],
       raw: true,
     });
-
-    if (!data.length) {
-      return ReS(res, { success: true, analysis: [] }, 200);
-    }
 
     const coSheetIds = [...new Set(data.map((d) => d.id))];
 
@@ -325,21 +335,31 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
 
     const targetMap = {};
     targets.forEach((t) => {
-      const key = new Date(t.targetDate).toISOString().slice(0, 10);
+      const key = formatLocalDate(new Date(t.targetDate));
       targetMap[key] = t.resumetarget;
     });
 
+    // --- Build result ---
     const result = [];
 
-    for (let id of coSheetIds) {
-      const coSheetData = data.filter((d) => d.id === id);
-      const followUpUsers = [...new Set(coSheetData.map((d) => d.followUpBy).filter(Boolean))];
+    // If no CoSheet IDs found, still return zeros for range
+    const idsToProcess = coSheetIds.length ? coSheetIds : [null];
 
-      // --- Build periods using query range, not just actual CoSheet dates ---
+    for (let id of idsToProcess) {
+      const coSheetData = data.filter((d) => d.id === id);
+      const followUpBy = [
+        ...new Set(coSheetData.map((d) => d.followUpBy).filter(Boolean)),
+      ];
+
+      // --- Build periods (ensure full range even if no data) ---
       let periods = [];
       if (period === "daily") {
-        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-          periods.push(new Date(d).toISOString().slice(0, 10));
+        for (
+          let d = new Date(startDate);
+          d <= endDate;
+          d.setDate(d.getDate() + 1)
+        ) {
+          periods.push(formatLocalDate(new Date(d)));
         }
       } else {
         for (
@@ -347,39 +367,61 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
           m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
           m.setMonth(m.getMonth() + 1)
         ) {
-          periods.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
+          periods.push(
+            `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`
+          );
         }
       }
 
-      const categories = ["resumes received", "sending in 1-2 days", "delayed", "no response", "unprofessional"];
+      const categories = [
+        "resumes received",
+        "sending in 1-2 days",
+        "delayed",
+        "no response",
+        "unprofessional",
+      ];
 
       const breakdown = periods.map((p) => {
-        const obj = { period: p, totalResumes: 0, resumetarget: targetMap[p] || 0 };
+        const obj = {
+          period: p,
+          totalResumes: 0,
+          resumetarget: targetMap[p] || 0,
+        };
         categories.forEach((c) => (obj[c.replace(/\s/g, "_")] = 0));
-        followUpUsers.forEach((u) => (obj[`followUpBy_${u}`] = 0));
+        followUpBy.forEach((u) => (obj[`followUpBy_${u}`] = 0));
         return obj;
       });
 
       // --- Fill breakdown with CoSheet data ---
       coSheetData.forEach((d) => {
-        if (!d.resumeDay) return;
-        const periodKey = period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
+        if (!d.resumeDate) return;
+        const resumeDay = formatLocalDate(new Date(d.resumeDate));
+        const periodKey =
+          period === "daily" ? resumeDay : resumeDay.slice(0, 7);
         const index = breakdown.findIndex((b) => b.period === periodKey);
         if (index !== -1) {
           const catKey = d.followUpResponse?.replace(/\s/g, "_");
           if (catKey) breakdown[index][catKey] += Number(d.resumeCount);
-          if (d.followUpBy) breakdown[index][`followUpBy_${d.followUpBy}`] += Number(d.resumeCount);
+          if (d.followUpBy)
+            breakdown[index][`followUpBy_${d.followUpBy}`] += Number(
+              d.resumeCount
+            );
           breakdown[index].totalResumes += Number(d.resumeCount);
         }
       });
 
       const totalResumes = breakdown.reduce((sum, b) => sum + b.totalResumes, 0);
-      const totalTarget = breakdown.reduce((sum, b) => sum + (b.resumetarget || 0), 0);
-      const efficiency = totalTarget ? ((totalResumes / totalTarget) * 100).toFixed(2) : 0;
+      const totalTarget = breakdown.reduce(
+        (sum, b) => sum + (b.resumetarget || 0),
+        0
+      );
+      const efficiency = totalTarget
+        ? ((totalResumes / totalTarget) * 100).toFixed(2)
+        : 0;
 
       result.push({
         coSheetId: id,
-        followUpUsers,
+        followUpBy,
         breakdown,
         totalResumes,
         totalTarget,
@@ -395,7 +437,6 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
 };
 
 module.exports.getResumeAnalysisPerCoSheet = getResumeAnalysisPerCoSheet;
-
 
 // 🔹 Endpoint: Get Resume Totals Per FollowUpBy (global, all users)
 const getFollowUpResumeTotals = async (req, res) => {
@@ -491,3 +532,48 @@ const getFollowUpData = async (req, res) => {
 
 module.exports.getFollowUpData = getFollowUpData;
 
+
+// Generic function to fetch category rows
+const fetchCategoryData = async (req, res, category) => {
+  try {
+    const userId = req.query.userId || req.params.userId;
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    const rows = await model.CoSheet.findAll({
+      where: {
+        userId,
+        followUpResponse: category,
+      },
+      raw: true,
+    });
+
+    return ReS(res, {
+      success: true,
+      userId,
+      category,
+      rows,
+    });
+  } catch (error) {
+    console.error(`Fetch ${category} Error:`, error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+// Export separate handlers
+const getResumesReceived = (req, res) =>
+  fetchCategoryData(req, res, "resumes received");
+module.exports.getResumesReceived = getResumesReceived;
+
+const getSendingIn12Days = (req, res) =>
+  fetchCategoryData(req, res, "sending in 1-2 days");
+module.exports.getSendingIn12Days = getSendingIn12Days;
+
+const getDelayed = (req, res) => fetchCategoryData(req, res, "delayed");
+module.exports.getDelayed = getDelayed;
+
+const getNoResponse = (req, res) => fetchCategoryData(req, res, "no response");
+module.exports.getNoResponse = getNoResponse;
+
+const getUnprofessional = (req, res) =>
+  fetchCategoryData(req, res, "unprofessional");
+module.exports.getUnprofessional = getUnprofessional;
