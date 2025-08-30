@@ -16,7 +16,8 @@ const updateResumeFields = async (req, res) => {
       "followUpResponse",
       "resumeDate",
       "resumeCount",
-      "expectedResponseDate"
+      "expectedResponseDate",
+      "userId"
     ];
 
     const allowedFollowUpResponses = [
@@ -70,12 +71,12 @@ const getResumeAnalysis = async (req, res) => {
 
     const { fromDate, toDate } = req.query;
 
-    const where = {
-      userId,
-      resumeDate: { [Op.ne]: null },
-    };
-    if (fromDate) where.resumeDate[Op.gte] = fromDate;
-    if (toDate) where.resumeDate[Op.lte] = toDate;
+    const where = { userId };
+    if (fromDate || toDate) {
+      where.resumeDate = {};
+      if (fromDate) where.resumeDate[Op.gte] = new Date(fromDate);
+      if (toDate) where.resumeDate[Op.lte] = new Date(toDate);
+    }
 
     const categories = [
       "resumes received",
@@ -90,11 +91,11 @@ const getResumeAnalysis = async (req, res) => {
       where,
       attributes: [
         "userId",
-        [fn("MAX", col("followUpBy")), "followUpBy"],
+        "followUpBy",
         "followUpResponse",
         [fn("SUM", col("resumeCount")), "totalResumes"],
       ],
-      group: ["userId", "followUpResponse"],
+      group: ["userId", "followUpBy", "followUpResponse"],
       raw: true,
     });
 
@@ -118,8 +119,8 @@ const getResumeAnalysis = async (req, res) => {
     const totalResumeTarget = targets.reduce((sum, t) => sum + (t.resumetarget || 0), 0);
 
     // --- Aggregate results ---
-    let totalAchievedFollowUps = 0;
-    let totalAchievedResumes = 0;
+    let totalAchievedFollowUps = 0; // count of follow-ups (rows where followUpBy != null)
+    let totalAchievedResumes = 0;   // sum of resumes
 
     const breakdown = {};
     categories.forEach((c) => (breakdown[c] = 0));
@@ -127,13 +128,18 @@ const getResumeAnalysis = async (req, res) => {
     let followUpBy = null;
 
     data.forEach((d) => {
+      // count follow-ups
+      if (d.followUpBy) {
+        totalAchievedFollowUps += 1; // each followUpBy row = 1 follow-up
+        followUpBy = d.followUpBy;
+      }
+
+      // count resumes
       const responseKey = d.followUpResponse?.toLowerCase();
       if (responseKey && categories.includes(responseKey)) {
-        breakdown[responseKey] += Number(d.totalResumes);
-        totalAchievedFollowUps += Number(d.totalResumes);
-        totalAchievedResumes += Number(d.totalResumes);
+        breakdown[responseKey] += Number(d.totalResumes || 0);
+        totalAchievedResumes += Number(d.totalResumes || 0);
       }
-      if (d.followUpBy) followUpBy = d.followUpBy;
     });
 
     const analysis = [
@@ -163,7 +169,7 @@ const getResumeAnalysis = async (req, res) => {
         totalResumeTarget,
         totalAchievedResumes,
         resumeEfficiency: Number(resumeEfficiency),
-        breakdownTotals: breakdown, // <-- added aggregated breakdown totals
+        breakdownTotals: breakdown,
       },
     });
   } catch (error) {
@@ -271,6 +277,7 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     const startDate = fromDate ? new Date(fromDate) : new Date(now.getFullYear(), now.getMonth(), 1);
     const endDate = toDate ? new Date(toDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
+    // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
       where: {
         userId,
@@ -288,11 +295,13 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
       raw: true,
     });
 
-    if (!data.length) return ReS(res, { success: true, analysis: [] }, 200);
+    if (!data.length) {
+      return ReS(res, { success: true, analysis: [] }, 200);
+    }
 
     const coSheetIds = [...new Set(data.map((d) => d.id))];
 
-    // fetch targets
+    // --- Fetch Targets ---
     const targets = await model.MyTarget.findAll({
       where: {
         userId,
@@ -314,18 +323,18 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
       const coSheetData = data.filter((d) => d.id === id);
       const followUpUsers = [...new Set(coSheetData.map((d) => d.followUpBy).filter(Boolean))];
 
-      const actualStart = new Date(Math.min(...coSheetData.map((d) => new Date(d.resumeDay))));
-      const actualEnd = new Date(Math.max(...coSheetData.map((d) => new Date(d.resumeDay))));
-
+      // --- Build periods using query range, not just actual CoSheet dates ---
       let periods = [];
       if (period === "daily") {
-        for (let d = new Date(actualStart); d <= actualEnd; d.setDate(d.getDate() + 1)) {
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
           periods.push(new Date(d).toISOString().slice(0, 10));
         }
       } else {
-        for (let m = new Date(actualStart.getFullYear(), actualStart.getMonth(), 1);
-          m <= new Date(actualEnd.getFullYear(), actualEnd.getMonth(), 1);
-          m.setMonth(m.getMonth() + 1)) {
+        for (
+          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+          m.setMonth(m.getMonth() + 1)
+        ) {
           periods.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
         }
       }
@@ -339,6 +348,7 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
         return obj;
       });
 
+      // --- Fill breakdown with CoSheet data ---
       coSheetData.forEach((d) => {
         if (!d.resumeDay) return;
         const periodKey = period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
@@ -371,7 +381,9 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.getResumeAnalysisPerCoSheet = getResumeAnalysisPerCoSheet;
+
 
 // 🔹 Endpoint: Get Resume Totals Per FollowUpBy (global, all users)
 const getFollowUpResumeTotals = async (req, res) => {
