@@ -285,15 +285,16 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     const { fromDate, toDate, period = "daily" } = req.query;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    const now = new Date();
+    // --- Default range = today's data only ---
+    const today = new Date();
     const startDate = fromDate
       ? new Date(fromDate)
-      : new Date(now.getFullYear(), now.getMonth(), 1);
+      : new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endDate = toDate
       ? new Date(toDate)
-      : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      : new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
 
-    // --- Fetch CoSheet data grouped only by followUp info ---
+    // --- Fetch CoSheet data grouped by followUp info ---
     const data = await model.CoSheet.findAll({
       where: {
         userId,
@@ -330,7 +331,7 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
       targetMap[key] = t.resumetarget;
     });
 
-    // --- Build periods ---
+    // --- Build periods (daily / monthly) ---
     let periods = [];
     if (period === "daily") {
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -380,17 +381,24 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     const totalTarget = breakdown.reduce((sum, b) => sum + (b.resumetarget || 0), 0);
     const efficiency = totalTarget ? ((totalResumes / totalTarget) * 100).toFixed(2) : 0;
 
-    return ReS(res, {
-      success: true,
-      analysis: {
-        userId,
-        followUpUsers,
-        breakdown,
-        totalResumes,
-        totalTarget,
-        efficiency: Number(efficiency),
+    // --- Response (old format: array of analysis objects) ---
+    return ReS(
+      res,
+      {
+        success: true,
+        analysis: [
+          {
+            userId,
+            followUpUsers,
+            breakdown,
+            totalResumes,
+            totalTarget,
+            efficiency: Number(efficiency),
+          },
+        ],
       },
-    }, 200);
+      200
+    );
   } catch (error) {
     console.error("Resume Analysis Per CoSheet Error:", error);
     return ReE(res, error.message, 500);
