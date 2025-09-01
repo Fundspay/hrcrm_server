@@ -76,7 +76,6 @@ const getResumeAnalysis = async (req, res) => {
     let targetWhere = { userId };
 
     if (fromDate || toDate) {
-      // --- filter by given range
       where.resumeDate = {};
       if (fromDate) where.resumeDate[Op.gte] = new Date(fromDate);
       if (toDate) where.resumeDate[Op.lte] = new Date(toDate);
@@ -85,7 +84,6 @@ const getResumeAnalysis = async (req, res) => {
       if (fromDate) targetWhere.targetDate[Op.gte] = new Date(fromDate);
       if (toDate) targetWhere.targetDate[Op.lte] = new Date(toDate);
     } else {
-      // --- default: today's data
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -101,6 +99,19 @@ const getResumeAnalysis = async (req, res) => {
       "no response",
       "unprofessional",
     ];
+
+    // --- Get all users for mapping followUpBy ---
+    const allUsers = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName"],
+      raw: true,
+    });
+
+    // Map for quick lookup
+    const userMap = {};
+    allUsers.forEach((u) => {
+      const fullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
+      userMap[fullName] = u.id;
+    });
 
     // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
@@ -132,38 +143,56 @@ const getResumeAnalysis = async (req, res) => {
     );
 
     // --- Aggregate results ---
-    let totalAchievedFollowUps = 0; // count of follow-ups (rows where followUpBy != null)
-    let totalAchievedResumes = 0; // sum of resumes
+    let totalAchievedFollowUps = 0;
+    let totalAchievedResumes = 0;
 
     const breakdown = {};
     categories.forEach((c) => (breakdown[c] = 0));
 
-    let followUpBy = null;
+    const analysis = [];
 
-    data.forEach((d) => {
-      // count follow-ups
+    for (const d of data) {
+      const resumeCount = Number(d.totalResumes || 0);
+      if (!resumeCount) continue;
+
+      let assignedUserId = d.userId;
+      let followUpByUserId = null;
+
       if (d.followUpBy) {
-        totalAchievedFollowUps += 1; // each followUpBy row = 1 follow-up
-        followUpBy = d.followUpBy;
+        const normalized = d.followUpBy.trim().toLowerCase();
+        followUpByUserId = userMap[normalized] || null;
+
+        if (followUpByUserId) {
+          assignedUserId = followUpByUserId; // credit to matched user
+        }
       }
 
-      // count resumes
+      // Find user details for reporting
+      const matchedUser = allUsers.find((u) => u.id == assignedUserId);
+      const userName = matchedUser
+        ? `${matchedUser.firstName} ${matchedUser.lastName}`
+        : d.followUpBy;
+
+      // Count resumes into breakdown
       const responseKey = d.followUpResponse?.toLowerCase();
       if (responseKey && categories.includes(responseKey)) {
-        breakdown[responseKey] += Number(d.totalResumes || 0);
-        totalAchievedResumes += Number(d.totalResumes || 0);
+        breakdown[responseKey] += resumeCount;
+        totalAchievedResumes += resumeCount;
       }
-    });
 
-    const analysis = [
-      {
-        userId,
-        followUpBy,
-        achievedResumes: totalAchievedResumes,
-        achievedFollowUps: totalAchievedFollowUps,
-        breakdown,
-      },
-    ];
+      if (d.followUpBy) {
+        totalAchievedFollowUps += 1;
+      }
+
+      analysis.push({
+        userId: assignedUserId,
+        userName,
+        followUpBy: d.followUpBy,
+        achievedResumes: resumeCount,
+        achievedFollowUps: d.followUpBy ? 1 : 0,
+        category: d.followUpResponse,
+      });
+    }
 
     const followUpEfficiency = totalFollowUpTarget
       ? ((totalAchievedFollowUps / totalFollowUpTarget) * 100).toFixed(2)
@@ -192,7 +221,6 @@ const getResumeAnalysis = async (req, res) => {
 };
 
 module.exports.getResumeAnalysis = getResumeAnalysis;
-
 
 // 🔹 Total Resume Analysis Endpoint (daily/monthly) with followUpBy
 const gettotalResumeAnalysis = async (req, res) => {
@@ -592,7 +620,7 @@ const getAllPendingFollowUps = async (req, res) => {
       success: true,
       totalRecords: coSheetData.length,
       data: coSheetData,
-      users, // 👈 always include user list
+      users, 
     });
   } catch (error) {
     console.error("Get All Pending FollowUps Error:", error);
