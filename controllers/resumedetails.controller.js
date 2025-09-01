@@ -54,7 +54,7 @@ const updateResumeFields = async (req, res) => {
       return ReE(res, "No resume fields to update", 400);
     }
 
-    // 🔹 Fix userId based on followUpBy (if followUpBy provided)
+    // 🔹 Always update userId if followUpBy is provided
     if (updates.followUpBy) {
       const allUsers = await model.User.findAll({
         attributes: ["id", "firstName", "lastName"],
@@ -121,21 +121,13 @@ const getResumeAnalysis = async (req, res) => {
       "unprofessional",
     ];
 
-    // --- Fetch all users so we can resolve followUpBy → userId
+    // --- Fetch all users
     const allUsers = await model.User.findAll({
       attributes: ["id", "firstName", "lastName"],
       raw: true,
     });
 
-    const userMap = {};
-    allUsers.forEach((u) => {
-      const fullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
-      const firstOnly = u.firstName.trim().toLowerCase();
-      userMap[fullName] = u.id;
-      userMap[firstOnly] = u.id; // also allow firstName-only match
-    });
-
-    // --- Fetch CoSheet data (raw rows)
+    // --- Fetch CoSheet data
     const data = await model.CoSheet.findAll({
       where,
       attributes: [
@@ -149,7 +141,7 @@ const getResumeAnalysis = async (req, res) => {
       raw: true,
     });
 
-    // --- Fetch Targets ---
+    // --- Fetch Targets
     const targets = await model.MyTarget.findAll({
       where: targetWhere,
       attributes: ["targetDate", "followUps", "resumetarget"],
@@ -165,34 +157,19 @@ const getResumeAnalysis = async (req, res) => {
       0
     );
 
-    // --- Aggregate results ---
+    // --- Aggregate results
     const analysisMap = {}; // userId → aggregated data
 
     for (const d of data) {
       const resumeCount = Number(d.resumeCount || 0);
       if (!resumeCount) continue;
 
-      let assignedUserId;
-
-      if (d.followUpBy) {
-        const normalized = d.followUpBy.trim().toLowerCase();
-        if (userMap[normalized]) {
-          // ✅ followUpBy user takes precedence
-          assignedUserId = userMap[normalized];
-        } else {
-          // fallback to row's userId
-          assignedUserId = d.userId;
-        }
-      } else {
-        assignedUserId = d.userId;
-      }
-
+      const assignedUserId = d.userId; // ✅ Always trust saved userId
       const matchedUser = allUsers.find((u) => u.id == assignedUserId);
       if (!matchedUser) continue;
 
-      const userName = `${matchedUser.firstName} ${matchedUser.lastName}`.trim();
+      const userName = `${matchedUser.firstName} ${matchedUser.lastName || ""}`.trim();
 
-      // init if not exists
       if (!analysisMap[assignedUserId]) {
         analysisMap[assignedUserId] = {
           userId: assignedUserId,
@@ -223,7 +200,7 @@ const getResumeAnalysis = async (req, res) => {
 
     const analysis = Object.values(analysisMap);
 
-    // --- Compute totals across all users ---
+    // --- Totals across all users
     const totalAchievedFollowUps = analysis.reduce(
       (sum, a) => sum + a.achievedFollowUps,
       0
@@ -259,6 +236,7 @@ const getResumeAnalysis = async (req, res) => {
 };
 
 module.exports.getResumeAnalysis = getResumeAnalysis;
+
 
 // 🔹 Total Resume Analysis Endpoint (daily/monthly) with followUpBy
 const gettotalResumeAnalysis = async (req, res) => {
