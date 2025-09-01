@@ -514,11 +514,27 @@ const fetchCategoryData = async (req, res, category) => {
       raw: true,
     });
 
+    // 🔹 Fetch all users
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
     return ReS(res, {
       success: true,
       userId,
       category,
+      totalRecords: rows.length,
       rows,
+      users: userList, // 🔹 Added here
     });
   } catch (error) {
     console.error(`Fetch ${category} Error:`, error);
