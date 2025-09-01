@@ -54,31 +54,26 @@ const updateResumeFields = async (req, res) => {
       return ReE(res, "No resume fields to update", 400);
     }
 
-    // --- EXTRA LOGIC: auto-correct userId based on followUpBy ---
+    // 🔹 Fix userId based on followUpBy (if followUpBy provided)
     if (updates.followUpBy) {
       const allUsers = await model.User.findAll({
         attributes: ["id", "firstName", "lastName"],
         raw: true,
       });
 
-      const userMap = {};
-      allUsers.forEach((u) => {
-        const fullName = `${u.firstName} ${u.lastName || ""}`.trim().toLowerCase();
-        const fullNameNoSpace = fullName.replace(/\s+/g, "");
-        const firstOnly = u.firstName.trim().toLowerCase();
+      const normalizedFollowUpBy = updates.followUpBy.trim().toLowerCase();
 
-        userMap[fullName] = u.id;
-        userMap[fullNameNoSpace] = u.id;
-        userMap[firstOnly] = u.id;
+      let matchedUser = allUsers.find((u) => {
+        const fullName = `${u.firstName} ${u.lastName || ""}`.trim().toLowerCase();
+        const firstOnly = u.firstName.trim().toLowerCase();
+        return (
+          normalizedFollowUpBy === fullName ||
+          normalizedFollowUpBy === firstOnly
+        );
       });
 
-      const normalized = updates.followUpBy.trim().toLowerCase();
-      const normalizedNoSpace = normalized.replace(/\s+/g, "");
-
-      if (userMap[normalized]) {
-        updates.userId = userMap[normalized];
-      } else if (userMap[normalizedNoSpace]) {
-        updates.userId = userMap[normalizedNoSpace];
+      if (matchedUser) {
+        updates.userId = matchedUser.id; // ✅ assign correct userId
       }
     }
 
