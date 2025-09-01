@@ -356,9 +356,9 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
         : 0;
 
       return {
-        date: p,
-        totalResumes,
-        totalTarget,
+        period: p,
+        resumes_recieved: totalResumes,
+        resumetarget: totalTarget,
         efficiency: Number(efficiency),
       };
     });
