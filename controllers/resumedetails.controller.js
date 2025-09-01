@@ -361,17 +361,16 @@ const getResumeAnalysis = async (req, res) => {
       raw: true,
     });
 
-    // 🔹 Fetch CoSheet data
+    // 🔹 Fetch CoSheet data aggregated per user
     const data = await model.CoSheet.findAll({
       where,
       attributes: [
-        "id",
         "userId",
         "followUpBy",
         "followUpResponse",
         [fn("SUM", col("resumeCount")), "totalResumes"],
       ],
-      group: ["id", "userId", "followUpBy", "followUpResponse"],
+      group: ["userId", "followUpBy", "followUpResponse"],
       raw: true,
     });
 
@@ -382,13 +381,18 @@ const getResumeAnalysis = async (req, res) => {
         // update DB
         await model.CoSheet.update(
           { userId: matchedUser.id },
-          { where: { id: row.id } }
+          {
+            where: {
+              userId: row.userId,
+              followUpBy: row.followUpBy,
+            },
+          }
         );
         row.userId = matchedUser.id;
       }
     }
 
-    // 🔹 Filter only rows that belong to this user
+    // 🔹 Only keep rows for this user
     const userData = data.filter((r) => String(r.userId) === String(userId));
 
     // --- Fetch Targets ---
@@ -466,6 +470,7 @@ const getResumeAnalysis = async (req, res) => {
 };
 
 module.exports.getResumeAnalysis = getResumeAnalysis;
+
 
 
 
