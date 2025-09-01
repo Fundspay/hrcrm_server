@@ -114,6 +114,7 @@ var handleTargets = async function (req, res) {
 module.exports.handleTargets = handleTargets;
 
 // GET fetch targets for frontend
+// GET fetch targets for frontend
 var fetchTargets = async function (req, res) {
   try {
     let { userId, startDate, endDate, month } = req.query;
@@ -144,7 +145,9 @@ var fetchTargets = async function (req, res) {
         date: d.toISOString().split("T")[0],
         day: d.toLocaleDateString("en-US", { weekday: "long" }),
         jds: 0,
-        calls: 0
+        calls: 0,
+        followUps: 0,
+        resumetarget: 0
       });
     }
 
@@ -165,18 +168,27 @@ var fetchTargets = async function (req, res) {
       return {
         ...d,
         jds: found ? found.jds : d.jds,
-        calls: found ? found.calls : d.calls
+        calls: found ? found.calls : d.calls,
+        followUps: found ? found.followUps : d.followUps,
+        resumetarget: found ? found.resumetarget : d.resumetarget
       };
     });
 
     // Totals
     const totalJds = merged.reduce((sum, t) => sum + t.jds, 0);
     const totalCalls = merged.reduce((sum, t) => sum + t.calls, 0);
+    const totalFollowUps = merged.reduce((sum, t) => sum + t.followUps, 0);
+    const totalResumeTarget = merged.reduce((sum, t) => sum + t.resumetarget, 0);
 
     return ReS(res, {
       success: true,
       dates: merged,
-      totals: { jds: totalJds, calls: totalCalls }
+      totals: {
+        jds: totalJds,
+        calls: totalCalls,
+        followUps: totalFollowUps,
+        resumetarget: totalResumeTarget
+      }
     }, 200);
 
   } catch (error) {
