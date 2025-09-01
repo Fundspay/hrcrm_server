@@ -19,7 +19,7 @@ const updateResumeFields = async (req, res) => {
       "resumeDate",
       "resumeCount",
       "expectedResponseDate",
-      "userId"
+      "userId",
     ];
 
     const allowedFollowUpResponses = [
@@ -54,9 +54,37 @@ const updateResumeFields = async (req, res) => {
       return ReE(res, "No resume fields to update", 400);
     }
 
-    await record.update(updates);
-    return ReS(res, { success: true, data: record }, 200);
+    // --- EXTRA LOGIC: auto-correct userId based on followUpBy ---
+    if (updates.followUpBy) {
+      const allUsers = await model.User.findAll({
+        attributes: ["id", "firstName", "lastName"],
+        raw: true,
+      });
 
+      const userMap = {};
+      allUsers.forEach((u) => {
+        const fullName = `${u.firstName} ${u.lastName || ""}`.trim().toLowerCase();
+        const fullNameNoSpace = fullName.replace(/\s+/g, "");
+        const firstOnly = u.firstName.trim().toLowerCase();
+
+        userMap[fullName] = u.id;
+        userMap[fullNameNoSpace] = u.id;
+        userMap[firstOnly] = u.id;
+      });
+
+      const normalized = updates.followUpBy.trim().toLowerCase();
+      const normalizedNoSpace = normalized.replace(/\s+/g, "");
+
+      if (userMap[normalized]) {
+        updates.userId = userMap[normalized];
+      } else if (userMap[normalizedNoSpace]) {
+        updates.userId = userMap[normalizedNoSpace];
+      }
+    }
+
+    await record.update(updates);
+
+    return ReS(res, { success: true, data: record }, 200);
   } catch (error) {
     console.error("CoSheet Resume Update Error:", error);
     return ReE(res, error.message, 500);
