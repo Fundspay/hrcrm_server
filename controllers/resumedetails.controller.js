@@ -305,7 +305,7 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
       where: {
-        userId,
+        userId,  // ✅ filter by userId
         resumeDate: { [Op.between]: [startDate, endDate] },
       },
       attributes: [
@@ -325,7 +325,7 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     // --- Fetch Targets ---
     const targets = await model.MyTarget.findAll({
       where: {
-        userId,
+        userId,  // ✅ filter by userId
         targetDate: { [Op.between]: [startDate, endDate] },
       },
       attributes: ["targetDate", "resumetarget"],
