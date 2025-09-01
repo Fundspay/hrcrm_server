@@ -3,6 +3,8 @@ const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op, fn, col } = model.Sequelize;
 const moment = require("moment");
+const { sendMail } = require("../middleware/mailer.middleware");
+
 
 
 const updateResumeFields = async (req, res) => {
@@ -580,10 +582,17 @@ const getAllPendingFollowUps = async (req, res) => {
       raw: true,
     });
 
+    // 🔹 Fetch all users (id, firstName, lastName, email)
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
     return ReS(res, {
       success: true,
       totalRecords: coSheetData.length,
       data: coSheetData,
+      usersList: users, // 👈 always include user list
     });
   } catch (error) {
     console.error("Get All Pending FollowUps Error:", error);
