@@ -533,7 +533,7 @@ const fetchCategoryData = async (req, res, category) => {
       userId,
       category,
       totalRecords: rows.length,
-      rows,
+      data: rows,
       users: userList, // 🔹 Added here
     });
   } catch (error) {
