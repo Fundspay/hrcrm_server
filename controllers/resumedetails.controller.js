@@ -441,10 +441,10 @@ const getFollowUpData = async (req, res) => {
     const userId = req.query.userId || req.params.userId;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    // 🔹 Step 1: Get user details
+    // 🔹 Step 1: Get user full name
     const user = await model.User.findOne({
       where: { id: userId },
-      attributes: ["id", "firstName", "lastName", "email"],
+      attributes: ["firstName", "lastName"],
       raw: true,
     });
 
@@ -452,31 +452,44 @@ const getFollowUpData = async (req, res) => {
       return ReE(res, "User not found", 404);
     }
 
-    const firstName = user.firstName?.trim() || "";
-    const lastName = user.lastName?.trim() || "";
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
     const fullName = `${firstName} ${lastName}`.trim();
 
-    // 🔹 Step 2: Fetch CoSheet entries where followUpBy matches user’s full name
+    // 🔹 Step 2: Fetch CoSheet entries where followUpBy matches user’s actual name (case-insensitive)
     const coSheetData = await model.CoSheet.findAll({
       where: {
         userId,
-        followUpBy: { [Op.iLike]: fullName }, // case-insensitive exact match
+        [Op.or]: [
+          { followUpBy: { [Op.iLike]: fullName } },   // case-insensitive full name
+          { followUpBy: { [Op.iLike]: firstName } },  // case-insensitive first name
+        ],
       },
       order: [["resumeDate", "ASC"]],
       raw: true,
     });
 
+    // 🔹 Step 3: Fetch all users
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
     return ReS(res, {
       success: true,
-      user: {
-        id: user.id,
-        firstName,
-        lastName,
-        fullName,
-        email: user.email,
-      },
+      userId,
+      followUpBy: fullName,
       totalRecords: coSheetData.length,
       data: coSheetData,
+      users: userList, // 🔹 Added here
     });
   } catch (error) {
     console.error("Get FollowUp Data Error:", error);
