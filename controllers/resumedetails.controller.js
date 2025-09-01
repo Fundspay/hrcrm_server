@@ -279,206 +279,89 @@ const gettotalResumeAnalysis = async (req, res) => {
 
 module.exports.gettotalResumeAnalysis = gettotalResumeAnalysis;
 
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 const getResumeAnalysisPerCoSheet = async (req, res) => {
   try {
-    const { userId } = req.params; // optional
-    const { fromDate, toDate, period = "daily" } = req.query;
+    const { userId } = req.params;
+    const { fromDate, toDate } = req.query;
 
     const now = new Date();
+
+    // --- Default = today only ---
     const startDate = fromDate
       ? new Date(fromDate)
-      : new Date(now.getFullYear(), now.getMonth(), 1);
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endDate = toDate
       ? new Date(toDate)
-      : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // --- Base where condition ---
-    const whereCondition = {
+    // --- Build all days in range ---
+    let periods = [];
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      periods.push(formatLocalDate(new Date(d)));
+    }
+
+    // --- Build CoSheet query ---
+    const whereClause = {
       resumeDate: { [Op.between]: [startDate, endDate] },
     };
-    if (userId) whereCondition.userId = userId;
+    if (userId) whereClause.userId = userId;
 
-    // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
-      where: whereCondition,
+      where: whereClause,
       attributes: [
-        "id",
-        "userId",
-        "followUpBy",
         [fn("DATE", col("resumeDate")), "resumeDay"],
-        "followUpResponse",
         [fn("SUM", col("resumeCount")), "resumeCount"],
       ],
-      group: ["id", "userId", "followUpBy", "resumeDay", "followUpResponse"],
-      order: [["id", "ASC"], ["resumeDay", "ASC"]],
+      group: ["resumeDay"],
       raw: true,
     });
 
-    // --- Case 1: No userId → return totals across all users ---
-    if (!userId) {
-      // Fetch all targets across all users
-      const targets = await model.MyTarget.findAll({
-        where: { targetDate: { [Op.between]: [startDate, endDate] } },
-        attributes: ["targetDate", "resumetarget"],
-        raw: true,
-      });
+    const resumeMap = {};
+    data.forEach((d) => {
+      const key = formatLocalDate(new Date(d.resumeDay));
+      resumeMap[key] = Number(d.resumeCount);
+    });
 
-      const targetMap = {};
-      targets.forEach((t) => {
-        const key = new Date(t.targetDate).toISOString().slice(0, 10);
-        if (!targetMap[key]) targetMap[key] = 0;
-        targetMap[key] += t.resumetarget;
-      });
+    // --- Fetch Targets ---
+    const targetWhere = {
+      targetDate: { [Op.between]: [startDate, endDate] },
+    };
+    if (userId) targetWhere.userId = userId;
 
-      // Build periods for the given range
-      let periods = [];
-      if (period === "daily") {
-        for (
-          let d = new Date(startDate);
-          d <= endDate;
-          d.setDate(d.getDate() + 1)
-        ) {
-          periods.push(new Date(d).toISOString().slice(0, 10));
-        }
-      } else {
-        for (
-          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          m.setMonth(m.getMonth() + 1)
-        ) {
-          periods.push(
-            `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`
-          );
-        }
-      }
-
-      const dailyTotals = periods.map((p) => ({
-        period: p,
-        totalResumes: 0,
-        totalTarget: targetMap[p] || 0,
-      }));
-
-      data.forEach((d) => {
-        if (!d.resumeDay) return;
-        const periodKey =
-          period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
-        const index = dailyTotals.findIndex((b) => b.period === periodKey);
-        if (index !== -1) {
-          dailyTotals[index].totalResumes += Number(d.resumeCount);
-        }
-      });
-
-      return ReS(res, { success: true, analysis: dailyTotals }, 200);
-    }
-
-    // --- Case 2: With userId → same detailed breakdown as before ---
-    if (!data.length) {
-      return ReS(res, { success: true, analysis: [] }, 200);
-    }
-
-    const coSheetIds = [...new Set(data.map((d) => d.id))];
-
-    // --- Fetch Targets (for that user only) ---
     const targets = await model.MyTarget.findAll({
-      where: {
-        userId,
-        targetDate: { [Op.between]: [startDate, endDate] },
-      },
+      where: targetWhere,
       attributes: ["targetDate", "resumetarget"],
       raw: true,
     });
 
     const targetMap = {};
     targets.forEach((t) => {
-      const key = new Date(t.targetDate).toISOString().slice(0, 10);
+      const key = formatLocalDate(new Date(t.targetDate));
       targetMap[key] = t.resumetarget;
     });
 
-    const result = [];
-
-    for (let id of coSheetIds) {
-      const coSheetData = data.filter((d) => d.id === id);
-      const followUpUsers = [
-        ...new Set(coSheetData.map((d) => d.followUpBy).filter(Boolean)),
-      ];
-
-      let periods = [];
-      if (period === "daily") {
-        for (
-          let d = new Date(startDate);
-          d <= endDate;
-          d.setDate(d.getDate() + 1)
-        ) {
-          periods.push(new Date(d).toISOString().slice(0, 10));
-        }
-      } else {
-        for (
-          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          m.setMonth(m.getMonth() + 1)
-        ) {
-          periods.push(
-            `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`
-          );
-        }
-      }
-
-      const categories = [
-        "resumes received",
-        "sending in 1-2 days",
-        "delayed",
-        "no response",
-        "unprofessional",
-      ];
-
-      const breakdown = periods.map((p) => {
-        const obj = {
-          period: p,
-          totalResumes: 0,
-          resumetarget: targetMap[p] || 0,
-        };
-        categories.forEach((c) => (obj[c.replace(/\s/g, "_")] = 0));
-        followUpUsers.forEach((u) => (obj[`followUpBy_${u}`] = 0));
-        return obj;
-      });
-
-      coSheetData.forEach((d) => {
-        if (!d.resumeDay) return;
-        const periodKey =
-          period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
-        const index = breakdown.findIndex((b) => b.period === periodKey);
-        if (index !== -1) {
-          const catKey = d.followUpResponse?.replace(/\s/g, "_");
-          if (catKey) breakdown[index][catKey] += Number(d.resumeCount);
-          if (d.followUpBy)
-            breakdown[index][`followUpBy_${d.followUpBy}`] += Number(
-              d.resumeCount
-            );
-          breakdown[index].totalResumes += Number(d.resumeCount);
-        }
-      });
-
-      const totalResumes = breakdown.reduce(
-        (sum, b) => sum + b.totalResumes,
-        0
-      );
-      const totalTarget = breakdown.reduce(
-        (sum, b) => sum + (b.resumetarget || 0),
-        0
-      );
+    // --- Build Final Result ---
+    const result = periods.map((p) => {
+      const totalResumes = resumeMap[p] || 0;
+      const totalTarget = targetMap[p] || 0;
       const efficiency = totalTarget
         ? ((totalResumes / totalTarget) * 100).toFixed(2)
         : 0;
 
-      result.push({
-        coSheetId: id,
-        followUpUsers,
-        breakdown,
+      return {
+        date: p,
         totalResumes,
         totalTarget,
         efficiency: Number(efficiency),
-      });
-    }
+      };
+    });
 
     return ReS(res, { success: true, analysis: result }, 200);
   } catch (error) {
@@ -488,7 +371,6 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
 };
 
 module.exports.getResumeAnalysisPerCoSheet = getResumeAnalysisPerCoSheet;
-
 
 // 🔹 Endpoint: Get Resume Totals Per FollowUpBy (global, all users)
 const getFollowUpResumeTotals = async (req, res) => {
