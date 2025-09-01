@@ -30,6 +30,7 @@ module.exports = (sequelize, Sequelize) => {
             resumeDate: { type: Sequelize.DATE, allowNull: true },
             resumeCount: { type: Sequelize.INTEGER, allowNull: true },
             expectedResponseDate: { type: Sequelize.DATE, allowNull: true },
+            followupemailsent: { type: Sequelize.BOOLEAN, allowNull: true },
 
             // Foreign key to User
             userId: { type: Sequelize.BIGINT, allowNull: true },
