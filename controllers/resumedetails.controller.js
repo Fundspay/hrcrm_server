@@ -67,13 +67,10 @@ module.exports.updateResumeFields = updateResumeFields;
 
 const getResumeAnalysis = async (req, res) => {
   try {
-    const userId = req.query.userId || req.params.userId;
-    if (!userId) return ReE(res, "userId is required", 400);
-
     const { fromDate, toDate } = req.query;
 
-    const where = { userId };
-    let targetWhere = { userId };
+    const where = {};
+    let targetWhere = {};
 
     if (fromDate || toDate) {
       where.resumeDate = {};
@@ -84,6 +81,7 @@ const getResumeAnalysis = async (req, res) => {
       if (fromDate) targetWhere.targetDate[Op.gte] = new Date(fromDate);
       if (toDate) targetWhere.targetDate[Op.lte] = new Date(toDate);
     } else {
+      // --- default: today's data
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -100,29 +98,31 @@ const getResumeAnalysis = async (req, res) => {
       "unprofessional",
     ];
 
-    // --- Get all users for mapping followUpBy ---
+    // --- Fetch all users so we can resolve followUpBy → userId
     const allUsers = await model.User.findAll({
       attributes: ["id", "firstName", "lastName"],
       raw: true,
     });
 
-    // Map for quick lookup
     const userMap = {};
     allUsers.forEach((u) => {
       const fullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
+      const firstOnly = u.firstName.trim().toLowerCase();
       userMap[fullName] = u.id;
+      userMap[firstOnly] = u.id; // also allow firstName-only match
     });
 
-    // --- Fetch CoSheet data ---
+    // --- Fetch CoSheet data (raw rows)
     const data = await model.CoSheet.findAll({
       where,
       attributes: [
+        "id",
         "userId",
         "followUpBy",
         "followUpResponse",
-        [fn("SUM", col("resumeCount")), "totalResumes"],
+        "resumeCount",
+        "resumeDate",
       ],
-      group: ["userId", "followUpBy", "followUpResponse"],
       raw: true,
     });
 
@@ -143,56 +143,72 @@ const getResumeAnalysis = async (req, res) => {
     );
 
     // --- Aggregate results ---
-    let totalAchievedFollowUps = 0;
-    let totalAchievedResumes = 0;
-
-    const breakdown = {};
-    categories.forEach((c) => (breakdown[c] = 0));
-
-    const analysis = [];
+    const analysisMap = {}; // userId → aggregated data
 
     for (const d of data) {
-      const resumeCount = Number(d.totalResumes || 0);
+      const resumeCount = Number(d.resumeCount || 0);
       if (!resumeCount) continue;
 
-      let assignedUserId = d.userId;
-      let followUpByUserId = null;
+      let assignedUserId;
 
       if (d.followUpBy) {
         const normalized = d.followUpBy.trim().toLowerCase();
-        followUpByUserId = userMap[normalized] || null;
-
-        if (followUpByUserId) {
-          assignedUserId = followUpByUserId; // credit to matched user
+        if (userMap[normalized]) {
+          // ✅ followUpBy user takes precedence
+          assignedUserId = userMap[normalized];
+        } else {
+          // fallback to row's userId
+          assignedUserId = d.userId;
         }
+      } else {
+        assignedUserId = d.userId;
       }
 
-      // Find user details for reporting
       const matchedUser = allUsers.find((u) => u.id == assignedUserId);
-      const userName = matchedUser
-        ? `${matchedUser.firstName} ${matchedUser.lastName}`
-        : d.followUpBy;
+      if (!matchedUser) continue;
 
-      // Count resumes into breakdown
-      const responseKey = d.followUpResponse?.toLowerCase();
-      if (responseKey && categories.includes(responseKey)) {
-        breakdown[responseKey] += resumeCount;
-        totalAchievedResumes += resumeCount;
+      const userName = `${matchedUser.firstName} ${matchedUser.lastName}`.trim();
+
+      // init if not exists
+      if (!analysisMap[assignedUserId]) {
+        analysisMap[assignedUserId] = {
+          userId: assignedUserId,
+          userName,
+          achievedResumes: 0,
+          achievedFollowUps: 0,
+          breakdown: {
+            "resumes received": 0,
+            "sending in 1-2 days": 0,
+            delayed: 0,
+            "no response": 0,
+            unprofessional: 0,
+          },
+        };
       }
 
-      if (d.followUpBy) {
-        totalAchievedFollowUps += 1;
-      }
+      // aggregate
+      analysisMap[assignedUserId].achievedResumes += resumeCount;
+      if (d.followUpBy) analysisMap[assignedUserId].achievedFollowUps += 1;
 
-      analysis.push({
-        userId: assignedUserId,
-        userName,
-        followUpBy: d.followUpBy,
-        achievedResumes: resumeCount,
-        achievedFollowUps: d.followUpBy ? 1 : 0,
-        category: d.followUpResponse,
-      });
+      if (
+        d.followUpResponse &&
+        analysisMap[assignedUserId].breakdown[d.followUpResponse] !== undefined
+      ) {
+        analysisMap[assignedUserId].breakdown[d.followUpResponse] += resumeCount;
+      }
     }
+
+    const analysis = Object.values(analysisMap);
+
+    // --- Compute totals across all users ---
+    const totalAchievedFollowUps = analysis.reduce(
+      (sum, a) => sum + a.achievedFollowUps,
+      0
+    );
+    const totalAchievedResumes = analysis.reduce(
+      (sum, a) => sum + a.achievedResumes,
+      0
+    );
 
     const followUpEfficiency = totalFollowUpTarget
       ? ((totalAchievedFollowUps / totalFollowUpTarget) * 100).toFixed(2)
@@ -211,7 +227,6 @@ const getResumeAnalysis = async (req, res) => {
         totalResumeTarget,
         totalAchievedResumes,
         resumeEfficiency: Number(resumeEfficiency),
-        breakdownTotals: breakdown,
       },
     });
   } catch (error) {
