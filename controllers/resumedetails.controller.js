@@ -593,3 +593,79 @@ const getAllPendingFollowUps = async (req, res) => {
 
 module.exports.getAllPendingFollowUps = getAllPendingFollowUps;
 
+const sendFollowUpEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cc, bcc } = req.body;
+
+    const record = await model.CoSheet.findByPk(id);
+    if (!record) return ReE(res, "CoSheet record not found", 404);
+
+    if (!record.emailId) {
+      return ReE(res, "No email found for this college", 400);
+    }
+
+    const subject = `Reconfirmation of Live Project Process – FundsAudit`;
+
+    // 📧 Email body (your provided text)
+    const html = `
+      <p>Respected ${record.coordinatorName || "Sir"},</p>
+
+      <p>Greetings from FundsAudit!</p>
+
+      <p>I hope this message finds you well.</p>
+
+      <p>This is to reconfirm the points discussed during our recent call held on <b>22nd August 2025</b> regarding the Live Project process:</p>
+
+      <ul>
+        <li><b>Student Responses –</b> As discussed, the list of interested students will be shared by your end on <b>1st September 2025</b></li>
+        <li><b>Pre-Placement Talk –</b> The pre-placement talk will be successfully conducted on <b>1st September 2025</b>, during which all necessary roles, responsibilities, and expectations were clearly communicated.</li>
+        <li><b>Interview Schedule –</b> Interviews for the shortlisted students are scheduled immediately after the Pre-Placement Talk.</li>
+        <li><b>Internship Commencement –</b> The selected students will begin their internship from <b>2nd September 2025</b>, with sessions scheduled to start between <b>11 a.m to 5 p.m.</b></li>
+        <li><b>Student Commitment –</b> As agreed, the selected students are expected to actively participate and commit to the <b>1-hour session time</b> allotted by the college.</li>
+      </ul>
+
+      <p>We request you to kindly acknowledge this mail and confirm the same from your end, so we can proceed with the required arrangements accordingly.</p>
+
+      <p>As I have been unable to reach you regarding the further proceedings, I kindly request you to let us know the updates at your earliest convenience.</p>
+
+      <p>Looking forward to a fruitful collaboration.</p>
+
+      <p>Pooja M. Shedge<br/>
+      Branch Manager – Pune<br/>
+      +91 8421034535 | +91 7420861507<br/>
+      Pune, Maharashtra<br/>
+      <a href="https://www.fundsaudit.in/">https://www.fundsaudit.in/</a><br/>
+      <a href="https://www.fundsweb.in/sub_sectors/subsector">https://www.fundsweb.in/sub_sectors/subsector</a>
+      </p>
+    `;
+
+    // send mail (no attachments)
+    const mailResponse = await sendMail(
+      record.emailId,
+      subject,
+      html,
+      [], // no JD attachment
+      cc,
+      bcc
+    );
+
+    if (!mailResponse.success) {
+      return ReE(res, "Failed to send follow-up email", 500);
+    }
+
+    // optional: track follow-up email sent
+    await record.update({
+      followupemailsent: true
+    });
+
+    return ReS(res, { success: true, message: "Follow-up email sent successfully" }, 200);
+  } catch (error) {
+    console.error("Send FollowUp Email Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.sendFollowUpEmail = sendFollowUpEmail;
+
+

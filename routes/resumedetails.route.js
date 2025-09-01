@@ -17,5 +17,6 @@ router.get("/followups/delayed/:userId", resumedetailsController.getDelayed);
 router.get("/followups/no-response/:userId", resumedetailsController.getNoResponse);
 router.get("/followups/unprofessional/:userId", resumedetailsController.getUnprofessional);
 router.get("/followups/pending", resumedetailsController.getAllPendingFollowUps);
+router.post("/send-followup-email/:id", resumedetailsController.sendFollowUpEmail);
 
 module.exports = router;
