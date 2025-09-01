@@ -7,7 +7,6 @@ const { sendMail } = require("../middleware/mailer.middleware");
 
 
 
-
 const updateResumeFields = async (req, res) => {
   try {
     const record = await model.CoSheet.findByPk(req.params.id);
@@ -593,7 +592,7 @@ const getAllPendingFollowUps = async (req, res) => {
       success: true,
       totalRecords: coSheetData.length,
       data: coSheetData,
-      usersList: users, // 👈 always include user list
+      users, // 👈 always include user list
     });
   } catch (error) {
     console.error("Get All Pending FollowUps Error:", error);
