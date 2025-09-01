@@ -286,32 +286,33 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
     if (!userId) return ReE(res, "userId is required", 400);
 
     const now = new Date();
-    const startDate = fromDate ? new Date(fromDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const endDate = toDate ? new Date(toDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startDate = fromDate
+      ? new Date(fromDate)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    const endDate = toDate
+      ? new Date(toDate)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // --- Fetch CoSheet data ---
+    // --- Fetch CoSheet data grouped only by followUp info ---
     const data = await model.CoSheet.findAll({
       where: {
         userId,
         resumeDate: { [Op.between]: [startDate, endDate] },
       },
       attributes: [
-        "id",
         "followUpBy",
         [fn("DATE", col("resumeDate")), "resumeDay"],
         "followUpResponse",
         [fn("SUM", col("resumeCount")), "resumeCount"],
       ],
-      group: ["id", "followUpBy", "resumeDay", "followUpResponse"],
-      order: [["id", "ASC"], ["resumeDay", "ASC"]],
+      group: ["followUpBy", "resumeDay", "followUpResponse"],
+      order: [["resumeDay", "ASC"]],
       raw: true,
     });
 
     if (!data.length) {
       return ReS(res, { success: true, analysis: [] }, 200);
     }
-
-    const coSheetIds = [...new Set(data.map((d) => d.id))];
 
     // --- Fetch Targets ---
     const targets = await model.MyTarget.findAll({
@@ -329,65 +330,67 @@ const getResumeAnalysisPerCoSheet = async (req, res) => {
       targetMap[key] = t.resumetarget;
     });
 
-    const result = [];
-
-    for (let id of coSheetIds) {
-      const coSheetData = data.filter((d) => d.id === id);
-      const followUpUsers = [...new Set(coSheetData.map((d) => d.followUpBy).filter(Boolean))];
-
-      // --- Build periods using query range, not just actual CoSheet dates ---
-      let periods = [];
-      if (period === "daily") {
-        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-          periods.push(new Date(d).toISOString().slice(0, 10));
-        }
-      } else {
-        for (
-          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          m.setMonth(m.getMonth() + 1)
-        ) {
-          periods.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
-        }
+    // --- Build periods ---
+    let periods = [];
+    if (period === "daily") {
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        periods.push(new Date(d).toISOString().slice(0, 10));
       }
+    } else {
+      for (
+        let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+        m.setMonth(m.getMonth() + 1)
+      ) {
+        periods.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
+      }
+    }
 
-      const categories = ["resumes received", "sending in 1-2 days", "delayed", "no response", "unprofessional"];
+    const categories = [
+      "resumes received",
+      "sending in 1-2 days",
+      "delayed",
+      "no response",
+      "unprofessional",
+    ];
 
-      const breakdown = periods.map((p) => {
-        const obj = { period: p, totalResumes: 0, resumetarget: targetMap[p] || 0 };
-        categories.forEach((c) => (obj[c.replace(/\s/g, "_")] = 0));
-        followUpUsers.forEach((u) => (obj[`followUpBy_${u}`] = 0));
-        return obj;
-      });
+    const followUpUsers = [...new Set(data.map((d) => d.followUpBy).filter(Boolean))];
 
-      // --- Fill breakdown with CoSheet data ---
-      coSheetData.forEach((d) => {
-        if (!d.resumeDay) return;
-        const periodKey = period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
-        const index = breakdown.findIndex((b) => b.period === periodKey);
-        if (index !== -1) {
-          const catKey = d.followUpResponse?.replace(/\s/g, "_");
-          if (catKey) breakdown[index][catKey] += Number(d.resumeCount);
-          if (d.followUpBy) breakdown[index][`followUpBy_${d.followUpBy}`] += Number(d.resumeCount);
-          breakdown[index].totalResumes += Number(d.resumeCount);
-        }
-      });
+    const breakdown = periods.map((p) => {
+      const obj = { period: p, totalResumes: 0, resumetarget: targetMap[p] || 0 };
+      categories.forEach((c) => (obj[c.replace(/\s/g, "_")] = 0));
+      followUpUsers.forEach((u) => (obj[`followUpBy_${u}`] = 0));
+      return obj;
+    });
 
-      const totalResumes = breakdown.reduce((sum, b) => sum + b.totalResumes, 0);
-      const totalTarget = breakdown.reduce((sum, b) => sum + (b.resumetarget || 0), 0);
-      const efficiency = totalTarget ? ((totalResumes / totalTarget) * 100).toFixed(2) : 0;
+    // --- Fill breakdown with CoSheet data ---
+    data.forEach((d) => {
+      if (!d.resumeDay) return;
+      const periodKey = period === "daily" ? d.resumeDay : d.resumeDay.slice(0, 7);
+      const index = breakdown.findIndex((b) => b.period === periodKey);
+      if (index !== -1) {
+        const catKey = d.followUpResponse?.replace(/\s/g, "_");
+        if (catKey) breakdown[index][catKey] += Number(d.resumeCount);
+        if (d.followUpBy) breakdown[index][`followUpBy_${d.followUpBy}`] += Number(d.resumeCount);
+        breakdown[index].totalResumes += Number(d.resumeCount);
+      }
+    });
 
-      result.push({
-        coSheetId: id,
+    const totalResumes = breakdown.reduce((sum, b) => sum + b.totalResumes, 0);
+    const totalTarget = breakdown.reduce((sum, b) => sum + (b.resumetarget || 0), 0);
+    const efficiency = totalTarget ? ((totalResumes / totalTarget) * 100).toFixed(2) : 0;
+
+    return ReS(res, {
+      success: true,
+      analysis: {
+        userId,
         followUpUsers,
         breakdown,
         totalResumes,
         totalTarget,
         efficiency: Number(efficiency),
-      });
-    }
-
-    return ReS(res, { success: true, analysis: result }, 200);
+      },
+    }, 200);
   } catch (error) {
     console.error("Resume Analysis Per CoSheet Error:", error);
     return ReE(res, error.message, 500);
