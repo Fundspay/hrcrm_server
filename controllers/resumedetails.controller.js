@@ -454,14 +454,15 @@ const getFollowUpData = async (req, res) => {
 
     const firstName = user.firstName.trim();
     const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
 
-    // 🔹 Step 2: Fetch CoSheet entries where followUpBy contains first or last name
+    // 🔹 Step 2: Fetch CoSheet entries where followUpBy matches user’s actual name (case-insensitive)
     const coSheetData = await model.CoSheet.findAll({
       where: {
         userId,
         [Op.or]: [
-          { followUpBy: { [Op.iLike]: `%${firstName}%` } },
-          { followUpBy: { [Op.iLike]: `%${lastName}%` } },
+          { followUpBy: { [Op.iLike]: fullName } },   // case-insensitive full name
+          { followUpBy: { [Op.iLike]: firstName } },  // case-insensitive first name
         ],
       },
       order: [["resumeDate", "ASC"]],
@@ -471,7 +472,7 @@ const getFollowUpData = async (req, res) => {
     return ReS(res, {
       success: true,
       userId,
-      followUpBy: `${firstName} ${lastName}`.trim(),
+      followUpBy: fullName,
       totalRecords: coSheetData.length,
       data: coSheetData,
     });
@@ -482,7 +483,6 @@ const getFollowUpData = async (req, res) => {
 };
 
 module.exports.getFollowUpData = getFollowUpData;
-
 
 // Generic function to fetch category rows
 const fetchCategoryData = async (req, res, category) => {
