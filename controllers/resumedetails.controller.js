@@ -441,10 +441,10 @@ const getFollowUpData = async (req, res) => {
     const userId = req.query.userId || req.params.userId;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    // 🔹 Step 1: Get user full name
+    // 🔹 Step 1: Get user details
     const user = await model.User.findOne({
       where: { id: userId },
-      attributes: ["firstName", "lastName"],
+      attributes: ["id", "firstName", "lastName", "email"],
       raw: true,
     });
 
@@ -452,18 +452,15 @@ const getFollowUpData = async (req, res) => {
       return ReE(res, "User not found", 404);
     }
 
-    const firstName = user.firstName.trim();
-    const lastName = user.lastName ? user.lastName.trim() : "";
+    const firstName = user.firstName?.trim() || "";
+    const lastName = user.lastName?.trim() || "";
     const fullName = `${firstName} ${lastName}`.trim();
 
-    // 🔹 Step 2: Fetch CoSheet entries where followUpBy matches user’s actual name (case-insensitive)
+    // 🔹 Step 2: Fetch CoSheet entries where followUpBy matches user’s full name
     const coSheetData = await model.CoSheet.findAll({
       where: {
         userId,
-        [Op.or]: [
-          { followUpBy: { [Op.iLike]: fullName } },   // case-insensitive full name
-          { followUpBy: { [Op.iLike]: firstName } },  // case-insensitive first name
-        ],
+        followUpBy: { [Op.iLike]: fullName }, // case-insensitive exact match
       },
       order: [["resumeDate", "ASC"]],
       raw: true,
@@ -471,8 +468,13 @@ const getFollowUpData = async (req, res) => {
 
     return ReS(res, {
       success: true,
-      userId,
-      followUpBy: fullName,
+      user: {
+        id: user.id,
+        firstName,
+        lastName,
+        fullName,
+        email: user.email,
+      },
       totalRecords: coSheetData.length,
       data: coSheetData,
     });
@@ -483,6 +485,7 @@ const getFollowUpData = async (req, res) => {
 };
 
 module.exports.getFollowUpData = getFollowUpData;
+
 
 // Generic function to fetch category rows
 const fetchCategoryData = async (req, res, category) => {
