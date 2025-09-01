@@ -7,233 +7,6 @@ const { sendMail } = require("../middleware/mailer.middleware");
 
 
 
-// const updateResumeFields = async (req, res) => {
-//   try {
-//     const record = await model.CoSheet.findByPk(req.params.id);
-//     if (!record) return ReE(res, "CoSheet record not found", 404);
-
-//     const resumeFields = [
-//       "followUpBy",
-//       "followUpDate",
-//       "followUpResponse",
-//       "resumeDate",
-//       "resumeCount",
-//       "expectedResponseDate",
-//       "userId"
-//     ];
-
-//     const allowedFollowUpResponses = [
-//       "resumes received",
-//       "sending in 1-2 days",
-//       "delayed",
-//       "no response",
-//       "unprofessional",
-//     ];
-
-//     const updates = {};
-
-//     for (let f of resumeFields) {
-//       if (req.body[f] !== undefined) {
-//         if (f === "followUpResponse") {
-//           const val = req.body[f]?.toLowerCase();
-//           if (val && !allowedFollowUpResponses.includes(val)) {
-//             return ReE(
-//               res,
-//               "Invalid followUpResponse. Allowed: resumes received, sending in 1-2 days, delayed, no response, unprofessional",
-//               400
-//             );
-//           }
-//           updates[f] = val || null;
-//         } else {
-//           updates[f] = req.body[f];
-//         }
-//       }
-//     }
-
-//     if (!Object.keys(updates).length) {
-//       return ReE(res, "No resume fields to update", 400);
-//     }
-
-//     await record.update(updates);
-//     return ReS(res, { success: true, data: record }, 200);
-
-//   } catch (error) {
-//     console.error("CoSheet Resume Update Error:", error);
-//     return ReE(res, error.message, 500);
-//   }
-// };
-
-// module.exports.updateResumeFields = updateResumeFields;
-
-// const getResumeAnalysis = async (req, res) => {
-//   try {
-//     const userId = req.query.userId || req.params.userId;
-//     if (!userId) return ReE(res, "userId is required", 400);
-
-//     const { fromDate, toDate } = req.query;
-
-//     const where = {};
-//     let targetWhere = { userId };
-
-//     if (fromDate || toDate) {
-//       where.resumeDate = {};
-//       if (fromDate) where.resumeDate[Op.gte] = new Date(fromDate);
-//       if (toDate) where.resumeDate[Op.lte] = new Date(toDate);
-
-//       targetWhere.targetDate = {};
-//       if (fromDate) targetWhere.targetDate[Op.gte] = new Date(fromDate);
-//       if (toDate) targetWhere.targetDate[Op.lte] = new Date(toDate);
-//     } else {
-//       const today = new Date();
-//       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-//       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-
-//       where.resumeDate = { [Op.between]: [startOfDay, endOfDay] };
-//       targetWhere.targetDate = { [Op.between]: [startOfDay, endOfDay] };
-//     }
-
-//     const categories = [
-//       "resumes received",
-//       "sending in 1-2 days",
-//       "delayed",
-//       "no response",
-//       "unprofessional",
-//     ];
-
-//     // --- fetch users for mapping ---
-//     const allUsers = await model.User.findAll({
-//       attributes: ["id", "firstName", "lastName"],
-//       raw: true,
-//     });
-
-//     // --- fetch CoSheet records (raw, no group yet) ---
-//     const records = await model.CoSheet.findAll({
-//       where,
-//       attributes: [
-//         "id",
-//         "userId",
-//         "followUpBy",
-//         "followUpResponse",
-//         "resumeCount",
-//       ],
-//       raw: true,
-//     });
-
-//     // --- normalize CoSheet.userId if mismatch ---
-//     for (const r of records) {
-//       if (!r.followUpBy) continue;
-
-//       const normalized = r.followUpBy.trim().toLowerCase();
-//       const matchedUser = allUsers.find((u) => {
-//         const fullName = `${u.firstName} ${u.lastName || ""}`.trim().toLowerCase();
-//         const firstOnly = u.firstName.trim().toLowerCase();
-//         return normalized === fullName || normalized === firstOnly;
-//       });
-
-//       if (matchedUser && r.userId !== matchedUser.id) {
-//         // 🔹 update DB so future queries are clean
-//         await model.CoSheet.update(
-//           { userId: matchedUser.id },
-//           { where: { id: r.id } }
-//         );
-//         r.userId = matchedUser.id; // also update in-memory
-//       }
-//     }
-
-//     // --- filter only current user’s records ---
-//     const data = records.filter((r) => r.userId == userId);
-
-//     // --- fetch targets ---
-//     const targets = await model.MyTarget.findAll({
-//       where: targetWhere,
-//       attributes: ["targetDate", "followUps", "resumetarget"],
-//       raw: true,
-//     });
-
-//     const totalFollowUpTarget = targets.reduce(
-//       (sum, t) => sum + (t.followUps || 0),
-//       0
-//     );
-//     const totalResumeTarget = targets.reduce(
-//       (sum, t) => sum + (t.resumetarget || 0),
-//       0
-//     );
-
-//     // --- aggregate ---
-//     let totalAchievedFollowUps = 0;
-//     let totalAchievedResumes = 0;
-
-//     const breakdown = {};
-//     categories.forEach((c) => (breakdown[c] = 0));
-
-//     let followUpBy = null;
-
-//     data.forEach((d) => {
-//       if (d.followUpBy) {
-//         totalAchievedFollowUps += 1;
-//         followUpBy = d.followUpBy;
-//       }
-
-//       const responseKey = d.followUpResponse?.toLowerCase();
-//       if (responseKey && categories.includes(responseKey)) {
-//         breakdown[responseKey] += Number(d.resumeCount || 0);
-//         totalAchievedResumes += Number(d.resumeCount || 0);
-//       }
-//     });
-
-//     const analysis = [
-//       {
-//         userId,
-//         followUpBy,
-//         achievedResumes: totalAchievedResumes,
-//         achievedFollowUps: totalAchievedFollowUps,
-//         breakdown,
-//       },
-//     ];
-
-//     const followUpEfficiency = totalFollowUpTarget
-//       ? ((totalAchievedFollowUps / totalFollowUpTarget) * 100).toFixed(2)
-//       : 0;
-//     const resumeEfficiency = totalResumeTarget
-//       ? ((totalAchievedResumes / totalResumeTarget) * 100).toFixed(2)
-//       : 0;
-
-//     return ReS(res, {
-//       success: true,
-//       analysis,
-//       totals: {
-//         totalFollowUpTarget,
-//         totalAchievedFollowUps,
-//         followUpEfficiency: Number(followUpEfficiency),
-//         totalResumeTarget,
-//         totalAchievedResumes,
-//         resumeEfficiency: Number(resumeEfficiency),
-//         breakdownTotals: breakdown,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Resume Analysis Error:", error);
-//     return ReE(res, error.message, 500);
-//   }
-// };
-
-// module.exports.getResumeAnalysis = getResumeAnalysis;
-
-function normalizeName(str) {
-  return str ? str.replace(/\s+/g, "").toLowerCase() : "";
-}
-
-function findUserByFollowUpName(followUpBy, allUsers) {
-  if (!followUpBy) return null;
-  const normalized = normalizeName(followUpBy);
-
-  return allUsers.find((u) => {
-    const fullName = normalizeName(`${u.firstName}${u.lastName || ""}`);
-    const firstOnly = normalizeName(u.firstName);
-    return normalized === fullName || normalized === firstOnly;
-  });
-}
-
 const updateResumeFields = async (req, res) => {
   try {
     const record = await model.CoSheet.findByPk(req.params.id);
@@ -246,7 +19,7 @@ const updateResumeFields = async (req, res) => {
       "resumeDate",
       "resumeCount",
       "expectedResponseDate",
-      "userId",
+      "userId"
     ];
 
     const allowedFollowUpResponses = [
@@ -281,22 +54,9 @@ const updateResumeFields = async (req, res) => {
       return ReE(res, "No resume fields to update", 400);
     }
 
-    // 🔹 Fix userId based on followUpBy (if provided)
-    if (updates.followUpBy) {
-      const allUsers = await model.User.findAll({
-        attributes: ["id", "firstName", "lastName"],
-        raw: true,
-      });
-
-      const matchedUser = findUserByFollowUpName(updates.followUpBy, allUsers);
-      if (matchedUser) {
-        updates.userId = matchedUser.id; // ✅ assign correct userId
-      }
-    }
-
     await record.update(updates);
-
     return ReS(res, { success: true, data: record }, 200);
+
   } catch (error) {
     console.error("CoSheet Resume Update Error:", error);
     return ReE(res, error.message, 500);
@@ -305,21 +65,6 @@ const updateResumeFields = async (req, res) => {
 
 module.exports.updateResumeFields = updateResumeFields;
 
-function normalizeName(str) {
-  return str ? str.replace(/\s+/g, "").toLowerCase() : "";
-}
-
-function findUserByFollowUpName(followUpBy, allUsers) {
-  if (!followUpBy) return null;
-  const normalized = normalizeName(followUpBy);
-
-  return allUsers.find((u) => {
-    const fullName = normalizeName(`${u.firstName}${u.lastName || ""}`);
-    const firstOnly = normalizeName(u.firstName);
-    return normalized === fullName || normalized === firstOnly;
-  });
-}
-
 const getResumeAnalysis = async (req, res) => {
   try {
     const userId = req.query.userId || req.params.userId;
@@ -327,10 +72,11 @@ const getResumeAnalysis = async (req, res) => {
 
     const { fromDate, toDate } = req.query;
 
-    const where = {};
+    const where = { userId };
     let targetWhere = { userId };
 
     if (fromDate || toDate) {
+      // --- filter by given range
       where.resumeDate = {};
       if (fromDate) where.resumeDate[Op.gte] = new Date(fromDate);
       if (toDate) where.resumeDate[Op.lte] = new Date(toDate);
@@ -339,6 +85,7 @@ const getResumeAnalysis = async (req, res) => {
       if (fromDate) targetWhere.targetDate[Op.gte] = new Date(fromDate);
       if (toDate) targetWhere.targetDate[Op.lte] = new Date(toDate);
     } else {
+      // --- default: today's data
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
@@ -355,13 +102,7 @@ const getResumeAnalysis = async (req, res) => {
       "unprofessional",
     ];
 
-    // 🔹 Fetch all users
-    const allUsers = await model.User.findAll({
-      attributes: ["id", "firstName", "lastName"],
-      raw: true,
-    });
-
-    // 🔹 Fetch CoSheet data aggregated per user
+    // --- Fetch CoSheet data ---
     const data = await model.CoSheet.findAll({
       where,
       attributes: [
@@ -373,27 +114,6 @@ const getResumeAnalysis = async (req, res) => {
       group: ["userId", "followUpBy", "followUpResponse"],
       raw: true,
     });
-
-    // 🔹 Fix userId by matching followUpBy with users
-    for (let row of data) {
-      const matchedUser = findUserByFollowUpName(row.followUpBy, allUsers);
-      if (matchedUser && row.userId !== matchedUser.id) {
-        // update DB
-        await model.CoSheet.update(
-          { userId: matchedUser.id },
-          {
-            where: {
-              userId: row.userId,
-              followUpBy: row.followUpBy,
-            },
-          }
-        );
-        row.userId = matchedUser.id;
-      }
-    }
-
-    // 🔹 Only keep rows for this user
-    const userData = data.filter((r) => String(r.userId) === String(userId));
 
     // --- Fetch Targets ---
     const targets = await model.MyTarget.findAll({
@@ -412,20 +132,22 @@ const getResumeAnalysis = async (req, res) => {
     );
 
     // --- Aggregate results ---
-    let totalAchievedFollowUps = 0;
-    let totalAchievedResumes = 0;
+    let totalAchievedFollowUps = 0; // count of follow-ups (rows where followUpBy != null)
+    let totalAchievedResumes = 0; // sum of resumes
 
     const breakdown = {};
     categories.forEach((c) => (breakdown[c] = 0));
 
     let followUpBy = null;
 
-    userData.forEach((d) => {
+    data.forEach((d) => {
+      // count follow-ups
       if (d.followUpBy) {
-        totalAchievedFollowUps += 1;
+        totalAchievedFollowUps += 1; // each followUpBy row = 1 follow-up
         followUpBy = d.followUpBy;
       }
 
+      // count resumes
       const responseKey = d.followUpResponse?.toLowerCase();
       if (responseKey && categories.includes(responseKey)) {
         breakdown[responseKey] += Number(d.totalResumes || 0);
@@ -470,8 +192,6 @@ const getResumeAnalysis = async (req, res) => {
 };
 
 module.exports.getResumeAnalysis = getResumeAnalysis;
-
-
 
 
 // 🔹 Total Resume Analysis Endpoint (daily/monthly) with followUpBy
@@ -872,7 +592,7 @@ const getAllPendingFollowUps = async (req, res) => {
       success: true,
       totalRecords: coSheetData.length,
       data: coSheetData,
-      users, // 👈 always include user list
+      usersList: users, // 👈 always include user list
     });
   } catch (error) {
     console.error("Get All Pending FollowUps Error:", error);
