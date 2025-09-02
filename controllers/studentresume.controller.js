@@ -783,10 +783,17 @@ const getUserResumesAchieved = async (req, res) => {
       raw: true,
     });
 
+    // ---- Fetch all users ----
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
     return res.json({
       success: true,
       resumesAchieved: resumes.length,
-      resumesData: resumes
+      resumesData: resumes,
+      users, // include user list
     });
   } catch (error) {
     console.error("Error in getUserResumesAchieved:", error);
@@ -795,7 +802,6 @@ const getUserResumesAchieved = async (req, res) => {
 };
 
 module.exports.getUserResumesAchieved = getUserResumesAchieved;
-
 
 const getUserInterviewsAchieved = async (req, res) => {
   try {
@@ -827,10 +833,17 @@ const getUserInterviewsAchieved = async (req, res) => {
       raw: true,
     });
 
+    // ---- Fetch all users ----
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
     return res.json({
       success: true,
       interviewsAchieved: interviews.length,
       interviewsData: interviews,
+      users, // include user list
     });
   } catch (error) {
     console.error("Error in getUserInterviewsAchieved:", error);
