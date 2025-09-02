@@ -136,18 +136,21 @@ module.exports.updateResume = updateResume;
 // ✅ List all resumes
 const listResumes = async (req, res) => {
   try {
+    // Fetch all resumes with associated CoSheet data
     const records = await model.StudentResume.findAll({
       include: [
-        { model: model.CoSheet, attributes: ["id", "collegeName"] },
-        { 
-          model: model.User, 
-          attributes: ["id", "firstName", "lastName", "email"] 
-        },
+        { model: model.CoSheet, attributes: ["id", "collegeName"] }
       ],
       order: [["createdAt", "DESC"]],
     });
 
-    return ReS(res, { success: true, data: records }, 200);
+    // Fetch all users separately
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    return ReS(res, { success: true, data: records, users }, 200);
   } catch (error) {
     console.error("StudentResume List Error:", error);
     return ReE(res, error.message, 500);
@@ -155,8 +158,6 @@ const listResumes = async (req, res) => {
 };
 
 module.exports.listResumes = listResumes;
-
-
 
 // ✅ Delete resume by ID
 const deleteResume = async (req, res) => {
