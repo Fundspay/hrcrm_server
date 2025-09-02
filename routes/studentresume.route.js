@@ -11,6 +11,7 @@ router.put("/update/:id", studentresumeController.updateResume);
 router.get("/list", studentresumeController.listResumes);
 router.get("/list/user/:userId", studentresumeController.listResumesByUserId);
 router.delete("/delete/:id", studentresumeController.deleteResume);
+router.get("/work-analysis", studentresumeController.getUserTargetAnalysis);
 
 
 
