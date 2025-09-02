@@ -36,14 +36,26 @@ var handleTargets = async function (req, res) {
         jds: 0,
         calls: 0,
         followUps: 0,
-        resumetarget: 0
+        resumetarget: 0,
+        collegeTarget: 0,
+        interviewsTarget: 0,
+        resumesReceivedTarget: 0,
       });
     }
 
     // Upsert targets if provided
     if (targets && Array.isArray(targets)) {
       for (let t of targets) {
-        const { date, jds, calls, followUps, resumetarget } = t;
+        const {
+          date,
+          jds,
+          calls,
+          followUps,
+          resumetarget,
+          collegeTarget,
+          interviewsTarget,
+          resumesReceivedTarget,
+        } = t;
         const targetDate = new Date(date);
 
         let existing = await model.MyTarget.findOne({
@@ -55,6 +67,9 @@ var handleTargets = async function (req, res) {
           existing.calls = calls ?? existing.calls;
           existing.followUps = followUps ?? existing.followUps;
           existing.resumetarget = resumetarget ?? existing.resumetarget;
+          existing.collegeTarget = collegeTarget ?? existing.collegeTarget;
+          existing.interviewsTarget = interviewsTarget ?? existing.interviewsTarget;
+          existing.resumesReceivedTarget = resumesReceivedTarget ?? existing.resumesReceivedTarget;
           await existing.save();
         } else {
           await model.MyTarget.create({
@@ -63,7 +78,10 @@ var handleTargets = async function (req, res) {
             jds: jds || 0,
             calls: calls || 0,
             followUps: followUps || 0,
-            resumetarget: resumetarget || 0
+            resumetarget: resumetarget || 0,
+            collegeTarget: collegeTarget || 0,
+            interviewsTarget: interviewsTarget || 0,
+            resumesReceivedTarget: resumesReceivedTarget || 0,
           });
         }
       }
@@ -78,34 +96,42 @@ var handleTargets = async function (req, res) {
     });
 
     // Merge existing targets into dateList
-    const merged = dateList.map(d => {
-      const found = existingTargets.find(t => new Date(t.targetDate).toISOString().split("T")[0] === d.date);
+    const merged = dateList.map((d) => {
+      const found = existingTargets.find(
+        (t) => new Date(t.targetDate).toISOString().split("T")[0] === d.date
+      );
       return {
         ...d,
         jds: found ? found.jds : d.jds,
         calls: found ? found.calls : d.calls,
         followUps: found ? found.followUps : d.followUps,
-        resumetarget: found ? found.resumetarget : d.resumetarget
+        resumetarget: found ? found.resumetarget : d.resumetarget,
+        collegeTarget: found ? found.collegeTarget : d.collegeTarget,
+        interviewsTarget: found ? found.interviewsTarget : d.interviewsTarget,
+        resumesReceivedTarget: found ? found.resumesReceivedTarget : d.resumesReceivedTarget,
       };
     });
 
     // Compute totals
-    const totalJds = merged.reduce((sum, t) => sum + t.jds, 0);
-    const totalCalls = merged.reduce((sum, t) => sum + t.calls, 0);
-    const totalFollowUps = merged.reduce((sum, t) => sum + t.followUps, 0);
-    const totalResumeTarget = merged.reduce((sum, t) => sum + t.resumetarget, 0);
+    const totals = {
+      jds: merged.reduce((sum, t) => sum + t.jds, 0),
+      calls: merged.reduce((sum, t) => sum + t.calls, 0),
+      followUps: merged.reduce((sum, t) => sum + t.followUps, 0),
+      resumetarget: merged.reduce((sum, t) => sum + t.resumetarget, 0),
+      collegeTarget: merged.reduce((sum, t) => sum + t.collegeTarget, 0),
+      interviewsTarget: merged.reduce((sum, t) => sum + t.interviewsTarget, 0),
+      resumesReceivedTarget: merged.reduce((sum, t) => sum + t.resumesReceivedTarget, 0),
+    };
 
-    return ReS(res, {
-      success: true,
-      dates: merged,
-      totals: {
-        jds: totalJds,
-        calls: totalCalls,
-        followUps: totalFollowUps,
-        resumetarget: totalResumeTarget
-      }
-    }, 200);
-
+    return ReS(
+      res,
+      {
+        success: true,
+        dates: merged,
+        totals,
+      },
+      200
+    );
   } catch (error) {
     return ReE(res, error.message, 500);
   }
@@ -114,13 +140,12 @@ var handleTargets = async function (req, res) {
 module.exports.handleTargets = handleTargets;
 
 // GET fetch targets for frontend
-// GET fetch targets for frontend
 var fetchTargets = async function (req, res) {
   try {
     let { userId, startDate, endDate, month } = req.query;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    userId = parseInt(userId, 10); // ✅ ensure bigint
+    userId = parseInt(userId, 10);
 
     const today = new Date();
     let sDate, eDate;
@@ -138,16 +163,20 @@ var fetchTargets = async function (req, res) {
       eDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     }
 
-    // Generate date list
+    // Generate date list (local YYYY-MM-DD + correct weekday)
     const dateList = [];
     for (let d = new Date(sDate); d <= eDate; d.setDate(d.getDate() + 1)) {
+      const current = new Date(d); // clone to avoid mutation issues
       dateList.push({
-        date: d.toISOString().split("T")[0],
-        day: d.toLocaleDateString("en-US", { weekday: "long" }),
+        date: current.toLocaleDateString("en-CA"), // YYYY-MM-DD in local tz
+        day: current.toLocaleDateString("en-US", { weekday: "long" }),
         jds: 0,
         calls: 0,
         followUps: 0,
-        resumetarget: 0
+        resumetarget: 0,
+        collegeTarget: 0,
+        interviewsTarget: 0,
+        resumesReceivedTarget: 0,
       });
     }
 
@@ -155,42 +184,49 @@ var fetchTargets = async function (req, res) {
     const existingTargets = await model.MyTarget.findAll({
       where: {
         userId,
-        targetDate: { [Op.between]: [sDate, eDate] }
-      }
+        targetDate: { [Op.between]: [sDate, eDate] },
+      },
     });
 
     // Merge existing into date list
-    const merged = dateList.map(d => {
-      const found = existingTargets.find(t => {
+    const merged = dateList.map((d) => {
+      const found = existingTargets.find((t) => {
         const tDate = new Date(t.targetDate);
-        return tDate.toISOString().split("T")[0] === d.date;
+        const tDateStr = tDate.toLocaleDateString("en-CA"); // match local YYYY-MM-DD
+        return tDateStr === d.date;
       });
       return {
         ...d,
         jds: found ? found.jds : d.jds,
         calls: found ? found.calls : d.calls,
         followUps: found ? found.followUps : d.followUps,
-        resumetarget: found ? found.resumetarget : d.resumetarget
+        resumetarget: found ? found.resumetarget : d.resumetarget,
+        collegeTarget: found ? found.collegeTarget : d.collegeTarget,
+        interviewsTarget: found ? found.interviewsTarget : d.interviewsTarget,
+        resumesReceivedTarget: found ? found.resumesReceivedTarget : d.resumesReceivedTarget,
       };
     });
 
     // Totals
-    const totalJds = merged.reduce((sum, t) => sum + t.jds, 0);
-    const totalCalls = merged.reduce((sum, t) => sum + t.calls, 0);
-    const totalFollowUps = merged.reduce((sum, t) => sum + t.followUps, 0);
-    const totalResumeTarget = merged.reduce((sum, t) => sum + t.resumetarget, 0);
+    const totals = {
+      jds: merged.reduce((sum, t) => sum + t.jds, 0),
+      calls: merged.reduce((sum, t) => sum + t.calls, 0),
+      followUps: merged.reduce((sum, t) => sum + t.followUps, 0),
+      resumetarget: merged.reduce((sum, t) => sum + t.resumetarget, 0),
+      collegeTarget: merged.reduce((sum, t) => sum + t.collegeTarget, 0),
+      interviewsTarget: merged.reduce((sum, t) => sum + t.interviewsTarget, 0),
+      resumesReceivedTarget: merged.reduce((sum, t) => sum + t.resumesReceivedTarget, 0),
+    };
 
-    return ReS(res, {
-      success: true,
-      dates: merged,
-      totals: {
-        jds: totalJds,
-        calls: totalCalls,
-        followUps: totalFollowUps,
-        resumetarget: totalResumeTarget
-      }
-    }, 200);
-
+    return ReS(
+      res,
+      {
+        success: true,
+        dates: merged,
+        totals,
+      },
+      200
+    );
   } catch (error) {
     return ReE(res, error.message, 500);
   }
