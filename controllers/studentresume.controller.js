@@ -21,17 +21,12 @@ const createResume = async (req, res) => {
             return { success: false, error: "userId is required" };
           }
 
-          // ✅ Fetch only coSheetId for that user
+          // ✅ Find coSheetId for that user (if exists, else keep null)
           const coSheet = await model.CoSheet.findOne({
             where: { userId },
             attributes: ["id"],
           });
-
-          if (!coSheet) {
-            return { success: false, error: "No CoSheet found for this user" };
-          }
-
-          const coSheetId = coSheet.id;
+          const coSheetId = coSheet ? coSheet.id : null;
 
           // ✅ Duplicate check (studentName + mobileNumber + emailId)
           const duplicate = await model.StudentResume.findOne({
@@ -56,8 +51,8 @@ const createResume = async (req, res) => {
             sr: data.sr ?? null,
             resumeDate: data.resumeDate ?? null,
             collegeName: data.collegeName ?? null,
-            course: data.course ?? null, // take as is
-            internshipType: data.internshipType ?? null, // take as is
+            course: data.course ?? null, // take as-is
+            internshipType: data.internshipType ?? null, // take as-is
             followupBy: data.followupBy ?? null,
             studentName: data.studentName ?? null,
             mobileNumber: data.mobileNumber ?? null,
@@ -65,7 +60,7 @@ const createResume = async (req, res) => {
             domain: data.domain ?? null,
             interviewDate: data.interviewDate ?? null,
             dateOfOnboarding: data.dateOfOnboarding ?? null,
-            coSheetId, // ✅ Always from CoSheet
+            coSheetId, // ✅ null if not found
             userId,
           };
 
@@ -92,6 +87,7 @@ const createResume = async (req, res) => {
 };
 
 module.exports.createResume = createResume;
+
 
 // ✅ Update Resume Record
 const updateResume = async (req, res) => {
