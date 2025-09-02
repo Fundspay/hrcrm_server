@@ -567,33 +567,22 @@ module.exports.listResumesByUserId = listResumesByUserId;
 const getUserTargetAnalysis = async (req, res) => {
   try {
     const { fromDate, toDate, userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: "userId is required" });
 
-    if (!userId) {
-      return res.status(400).json({ success: false, error: "userId is required" });
-    }
+    let startDate = fromDate ? new Date(fromDate) : new Date();
+    startDate.setHours(0, 0, 0, 0);
+    let endDate = toDate ? new Date(toDate) : new Date();
+    endDate.setHours(23, 59, 59, 999);
 
-    // ---- Date Range Handling ----
-    let startDate, endDate;
-    if (fromDate && toDate) {
-      startDate = new Date(fromDate);
-      endDate = new Date(toDate);
-    } else {
-      startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date();
-      endDate.setHours(23, 59, 59, 999);
-    }
-
-    // ---- Fetch resumes ----
     const resumes = await model.StudentResume.findAll({
       where: {
         userId,
         resumeDate: { [Op.between]: [startDate, endDate] },
       },
       attributes: ["followupBy", "resumeDate", "interviewDate", "collegeName"],
+      raw: true, // make it easier to work with plain objects
     });
 
-    // ---- Fetch Targets ----
     const targets = await model.MyTarget.findAll({
       where: {
         userId,
@@ -613,14 +602,15 @@ const getUserTargetAnalysis = async (req, res) => {
       resumesReceivedTarget: 0,
     };
 
-    // ---- Group Achievements by followupBy ----
     const achieved = {};
-    resumes.forEach((resume) => {
-      const followupBy = resume.followupBy || "Unknown";
 
-      if (!achieved[followupBy]) {
-        achieved[followupBy] = {
-          followupBy,
+    resumes.forEach((resume) => {
+      const key = (resume.followupBy || "Unknown").trim().toLowerCase();
+      const displayName = resume.followupBy || "Unknown";
+
+      if (!achieved[key]) {
+        achieved[key] = {
+          followupBy: displayName,
           collegesAchieved: new Set(),
           resumesAchieved: 0,
           interviewsAchieved: 0,
@@ -629,39 +619,33 @@ const getUserTargetAnalysis = async (req, res) => {
         };
       }
 
-      if (resume.collegeName) {
-        achieved[followupBy].collegesAchieved.add(resume.collegeName);
+      if (resume.collegeName) achieved[key].collegesAchieved.add(resume.collegeName);
+
+      achieved[key].resumesAchieved += 1;
+
+      if (resume.resumeDate) {
+        const formattedResumeDate = new Date(resume.resumeDate).toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        });
+        achieved[key].resumeDates.push(formattedResumeDate);
       }
 
-      achieved[followupBy].resumesAchieved += 1;
-
-      // Format dates
-      const formattedResumeDate = resume.resumeDate
-        ? new Date(resume.resumeDate).toLocaleDateString("en-GB", {
-            weekday: "long",
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-          })
-        : null;
-
-      const formattedInterviewDate = resume.interviewDate
-        ? new Date(resume.interviewDate).toLocaleDateString("en-GB", {
-            weekday: "long",
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-          })
-        : null;
-
-      if (formattedResumeDate) achieved[followupBy].resumeDates.push(formattedResumeDate);
-      if (formattedInterviewDate) {
-        achieved[followupBy].interviewsAchieved += 1;
-        achieved[followupBy].interviewDates.push(formattedInterviewDate);
+      if (resume.interviewDate) {
+        const formattedInterviewDate = new Date(resume.interviewDate).toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        });
+        achieved[key].interviewDates.push(formattedInterviewDate);
+        achieved[key].interviewsAchieved += 1;
       }
     });
 
-    let result = Object.values(achieved).map((item) => ({
+    const result = Object.values(achieved).map((item) => ({
       followupBy: item.followupBy,
       collegeTarget: Number(targetData.collegeTarget),
       collegesAchieved: item.collegesAchieved.size,
@@ -673,23 +657,17 @@ const getUserTargetAnalysis = async (req, res) => {
       interviewDates: item.interviewDates,
     }));
 
-    if (result.length === 0) {
-      result = [
-        {
-          followupBy: "N/A",
-          collegeTarget: Number(targetData.collegeTarget),
-          collegesAchieved: 0,
-          interviewsTarget: Number(targetData.interviewsTarget),
-          interviewsAchieved: 0,
-          resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
-          resumesAchieved: 0,
-          resumeDates: [],
-          interviewDates: [],
-        },
-      ];
-    }
-
-    return res.json({ success: true, data: result });
+    return res.json({ success: true, data: result.length ? result : [{
+      followupBy: "N/A",
+      collegeTarget: Number(targetData.collegeTarget),
+      collegesAchieved: 0,
+      interviewsTarget: Number(targetData.interviewsTarget),
+      interviewsAchieved: 0,
+      resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
+      resumesAchieved: 0,
+      resumeDates: [],
+      interviewDates: [],
+    }]});
   } catch (error) {
     console.error("Error in getUserTargetAnalysis:", error);
     return res.status(500).json({ success: false, error: error.message });
@@ -697,7 +675,6 @@ const getUserTargetAnalysis = async (req, res) => {
 };
 
 module.exports.getUserTargetAnalysis = getUserTargetAnalysis;
-
 
 
 const sendMailToStudent = async (req, res) => {
