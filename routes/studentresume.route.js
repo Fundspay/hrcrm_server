@@ -5,11 +5,13 @@ const studentresumeController = require("../controllers/studentresume.controller
 
 
 // ✅ Resume CRUD
+
 router.post("/create", studentresumeController.createResume);
 router.put("/update/:id", studentresumeController.updateResume);
 router.get("/list", studentresumeController.listResumes);
 router.get("/list/user/:userId", studentresumeController.listResumesByUserId);
 router.delete("/delete/:id", studentresumeController.deleteResume);
+
 
 
 // Example: GET /analysis/college?userId=123
