@@ -904,8 +904,8 @@ const listResumesByUserIdfuture = async (req, res) => {
       where: {
         userId,
         [Op.or]: [
-          { followUpBy: { [Op.iLike]: fullName } },
-          { followUpBy: { [Op.iLike]: firstName } },
+          { followupBy: { [Op.iLike]: fullName } }, // <-- fix here
+          { followupBy: { [Op.iLike]: firstName } }, // <-- fix here
         ],
         resumeDate: { [Op.gte]: tomorrow }, // only future dates
       },
