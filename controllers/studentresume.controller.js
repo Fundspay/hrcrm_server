@@ -689,3 +689,90 @@ const sendMailToStudent = async (req, res) => {
 
 module.exports.sendMailToStudent = sendMailToStudent;
 
+const getUserResumesAchieved = async (req, res) => {
+  try {
+    const { fromDate, toDate, userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "userId is required" });
+    }
+
+    // ---- Date Range Handling ----
+    let startDate, endDate;
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      endDate = new Date(toDate);
+    } else {
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // ---- Fetch all achieved resumes ----
+    const resumes = await model.StudentResume.findAll({
+      where: {
+        userId,
+        resumeDate: { [Op.between]: [startDate, endDate] },
+      },
+      raw: true,
+    });
+
+    return res.json({
+      success: true,
+      resumesAchieved: resumes.length,
+      resumesData: resumes
+    });
+  } catch (error) {
+    console.error("Error in getUserResumesAchieved:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+module.exports.getUserResumesAchieved = getUserResumesAchieved;
+
+
+const getUserInterviewsAchieved = async (req, res) => {
+  try {
+    const { fromDate, toDate, userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "userId is required" });
+    }
+
+    // ---- Date Range Handling ----
+    let startDate, endDate;
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      endDate = new Date(toDate);
+    } else {
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // ---- Fetch all resumes with interviews ----
+    const interviews = await model.StudentResume.findAll({
+      where: {
+        userId,
+        interviewDate: { [Op.ne]: null },
+        resumeDate: { [Op.between]: [startDate, endDate] },
+      },
+      raw: true,
+    });
+
+    return res.json({
+      success: true,
+      interviewsAchieved: interviews.length,
+      interviewsData: interviews,
+    });
+  } catch (error) {
+    console.error("Error in getUserInterviewsAchieved:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+module.exports.getUserInterviewsAchieved = getUserInterviewsAchieved;
+
+
