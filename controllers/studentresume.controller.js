@@ -40,6 +40,7 @@ const createResume = async (req, res) => {
       emailId: data.emailId ?? null,
       domain: data.domain ?? null,
       interviewDate: data.interviewDate ?? null,
+      interviewTime: data.interviewTime ?? null,
       dateOfOnboarding: data.dateOfOnboarding ?? null,
       coSheetId: coSheetId,
       userId: userId,
@@ -88,7 +89,8 @@ const updateResume = async (req, res) => {
     const allowedFields = [
       "sr", "resumeDate", "collegeName", "course", "internshipType",
       "followupBy", "studentName", "mobileNumber", "emailId",
-      "domain", "interviewDate", "userId", "dateOfOnboarding"
+      "domain", "interviewDate", "userId", "dateOfOnboarding",
+      "interviewTime"
     ];
 
     for (let f of allowedFields) {
@@ -493,25 +495,54 @@ const getRAnalysis = async (req, res) => {
 
 module.exports.getRAnalysis = getRAnalysis;
 
-// ✅ List resumes by userId
+// ✅ List resumes by userId with user info and total count
 const listResumesByUserId = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.query.userId || req.params.userId;
     if (!userId) return ReE(res, "userId is required", 400);
 
-    const resumes = await model.StudentResume.findAll({
-      where: { userId },
-      order: [["createdAt", "DESC"]],
+    // 🔹 Step 1: Get user full name
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
     });
 
-    return ReS(res, { success: true, data: resumes }, 200);
+    if (!user) {
+      return ReE(res, "User not found", 404);
+    }
+
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    // 🔹 Step 2: Fetch StudentResume entries where followupBy matches fullName or firstName (case-insensitive)
+    const resumes = await model.StudentResume.findAll({
+      where: {
+        userId,
+        [Op.or]: [
+          { followupBy: { [Op.iLike]: fullName } },
+          { followupBy: { [Op.iLike]: firstName } },
+        ],
+      },
+      order: [["createdAt", "ASC"]],
+      raw: true,
+    });
+
+    return ReS(res, {
+      success: true,
+      userId,
+      followUpBy: fullName,
+      totalRecords: resumes.length,
+      data: resumes,
+    });
   } catch (error) {
     console.error("ListResumes Error:", error);
     return ReE(res, error.message, 500);
   }
 };
-module.exports.listResumesByUserId = listResumesByUserId;
 
+module.exports.listResumesByUserId = listResumesByUserId;
 
 
 const getUserTargetAnalysis = async (req, res) => {
