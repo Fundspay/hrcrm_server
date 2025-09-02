@@ -12,9 +12,14 @@ router.get("/list", studentresumeController.listResumes);
 router.get("/list/user/:userId", studentresumeController.listResumesByUserId);
 router.delete("/delete/:id", studentresumeController.deleteResume);
 router.get("/work-analysis", studentresumeController.getUserTargetAnalysis);
+router.post("/send-mail/:id",studentresumeController.sendMailToStudent);
 
 
 
+router.get("/resumes-achieved", studentresumeController.getUserResumesAchieved);
+
+// --- Interviews Achieved (total + rows) ---
+router.get("/interviews-achieved", studentresumeController.getUserInterviewsAchieved);
 // Example: GET /analysis/college?userId=123
 router.get("/college", studentresumeController.getCollegeAnalysis);
 
