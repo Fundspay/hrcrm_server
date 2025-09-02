@@ -16,6 +16,11 @@ module.exports = (sequelize, Sequelize) => {
       followUps: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       resumetarget: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
 
+      // New fields
+      collegeTarget: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      interviewsTarget: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      resumesReceivedTarget: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+
       createdAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.NOW },
     },
