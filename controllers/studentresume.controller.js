@@ -21,11 +21,19 @@ const createResume = async (req, res) => {
             return { success: false, error: "userId is required" };
           }
 
-          // Find coSheetId for that user
-          const coSheet = await model.CoSheet.findOne({ where: { userId } });
-          const coSheetId = coSheet ? coSheet.id : null;
+          // ✅ Fetch only coSheetId for that user
+          const coSheet = await model.CoSheet.findOne({
+            where: { userId },
+            attributes: ["id"],
+          });
 
-          // ✅ Duplicate check (using studentName + mobileNumber + emailId)
+          if (!coSheet) {
+            return { success: false, error: "No CoSheet found for this user" };
+          }
+
+          const coSheetId = coSheet.id;
+
+          // ✅ Duplicate check (studentName + mobileNumber + emailId)
           const duplicate = await model.StudentResume.findOne({
             where: {
               userId,
@@ -43,12 +51,13 @@ const createResume = async (req, res) => {
             };
           }
 
+          // ✅ Build payload
           const payload = {
             sr: data.sr ?? null,
             resumeDate: data.resumeDate ?? null,
             collegeName: data.collegeName ?? null,
-            course: data.course ?? null, // ✅ take whatever is given
-            internshipType: data.internshipType ?? null, // ✅ take whatever is given
+            course: data.course ?? null, // take as is
+            internshipType: data.internshipType ?? null, // take as is
             followupBy: data.followupBy ?? null,
             studentName: data.studentName ?? null,
             mobileNumber: data.mobileNumber ?? null,
@@ -56,8 +65,8 @@ const createResume = async (req, res) => {
             domain: data.domain ?? null,
             interviewDate: data.interviewDate ?? null,
             dateOfOnboarding: data.dateOfOnboarding ?? null,
-            coSheetId: coSheetId ?? null,
-            userId: userId,
+            coSheetId, // ✅ Always from CoSheet
+            userId,
           };
 
           const record = await model.StudentResume.create(payload);
@@ -83,7 +92,6 @@ const createResume = async (req, res) => {
 };
 
 module.exports.createResume = createResume;
-
 
 // ✅ Update Resume Record
 const updateResume = async (req, res) => {
