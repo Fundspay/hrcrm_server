@@ -25,16 +25,6 @@ const createResume = async (req, res) => {
           const coSheet = await model.CoSheet.findOne({ where: { userId } });
           const coSheetId = coSheet ? coSheet.id : null;
 
-          // // Validate internshipType
-          // if (data.internshipType && !allowedInternshipTypes.includes(data.internshipType.toLowerCase())) {
-          //   return { success: false, error: `Invalid internshipType. Allowed: ${allowedInternshipTypes.join(", ")}` };
-          // }
-
-          // // Validate course
-          // if (data.course && !allowedCourses.includes(data.course.toLowerCase())) {
-          //   return { success: false, error: `Invalid course. Allowed: ${allowedCourses.join(", ")}` };
-          // }
-
           // ✅ Duplicate check (using studentName + mobileNumber + emailId)
           const duplicate = await model.StudentResume.findOne({
             where: {
@@ -46,10 +36,10 @@ const createResume = async (req, res) => {
           });
 
           if (duplicate) {
-            return { 
-              success: false, 
-              warning: "Duplicate record found. Skipped insert.", 
-              data: duplicate 
+            return {
+              success: false,
+              warning: "Duplicate record found. Skipped insert.",
+              data: duplicate,
             };
           }
 
@@ -57,8 +47,8 @@ const createResume = async (req, res) => {
             sr: data.sr ?? null,
             resumeDate: data.resumeDate ?? null,
             collegeName: data.collegeName ?? null,
-            course: data.course ? data.course.toLowerCase() : null,
-            internshipType: data.internshipType ? data.internshipType.toLowerCase() : null,
+            course: data.course ?? null, // ✅ take whatever is given
+            internshipType: data.internshipType ?? null, // ✅ take whatever is given
             followupBy: data.followupBy ?? null,
             studentName: data.studentName ?? null,
             mobileNumber: data.mobileNumber ?? null,
@@ -80,7 +70,7 @@ const createResume = async (req, res) => {
     );
 
     // If all failed → 400
-    const allFailed = results.every(r => !r.success && !r.warning);
+    const allFailed = results.every((r) => !r.success && !r.warning);
     if (allFailed) {
       return ReE(res, "All resume creations failed", 400);
     }
@@ -91,7 +81,9 @@ const createResume = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.createResume = createResume;
+
 
 // ✅ Update Resume Record
 const updateResume = async (req, res) => {
@@ -529,3 +521,97 @@ module.exports.listResumesByUserId = listResumesByUserId;
 
 
 
+const getUserTargetAnalysis = async (req, res) => {
+  try {
+    const { fromDate, toDate, userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "userId is required" });
+    }
+
+    // ---- Date Range Handling ----
+    let startDate, endDate;
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      endDate = new Date(toDate);
+    } else {
+      // Default = today
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // ---- Fetch resumes ----
+    const resumes = await model.StudentResume.findAll({
+      where: {
+        userId,
+        resumeDate: { [Op.between]: [startDate, endDate] },
+      },
+      attributes: ["followupBy", "resumeDate", "interviewDate", "collegeName"],
+    });
+
+    // ---- Fetch Targets ----
+    const targets = await model.MyTarget.findAll({
+      where: {
+        userId,
+        targetDate: { [Op.between]: [startDate, endDate] },
+      },
+      attributes: [
+        [fn("SUM", col("collegeTarget")), "collegeTarget"],
+        [fn("SUM", col("interviewsTarget")), "interviewsTarget"],
+        [fn("SUM", col("resumesReceivedTarget")), "resumesReceivedTarget"],
+      ],
+      raw: true,
+    });
+
+    const targetData = targets[0] || {
+      collegeTarget: 0,
+      interviewsTarget: 0,
+      resumesReceivedTarget: 0,
+    };
+
+    // ---- Group Achievements by followupBy ----
+    const achieved = {};
+    resumes.forEach((resume) => {
+      const followupBy = resume.followupBy || "Unknown";
+
+      if (!achieved[followupBy]) {
+        achieved[followupBy] = {
+          followupBy,
+          collegesAchieved: new Set(),
+          resumesAchieved: 0,
+          interviewsAchieved: 0,
+        };
+      }
+
+      if (resume.collegeName) {
+        achieved[followupBy].collegesAchieved.add(resume.collegeName);
+      }
+
+      achieved[followupBy].resumesAchieved += 1;
+
+      if (resume.interviewDate) {
+        achieved[followupBy].interviewsAchieved += 1;
+      }
+    });
+
+    // ---- Final Response ----
+    const result = Object.values(achieved).map((item) => ({
+      followupBy: item.followupBy,
+      collegeTarget: Number(targetData.collegeTarget),
+      collegesAchieved: item.collegesAchieved.size,
+      interviewsTarget: Number(targetData.interviewsTarget),
+      interviewsAchieved: item.interviewsAchieved,
+      resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
+      resumesAchieved: item.resumesAchieved,
+    }));
+
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("Error in getUserWorkAnalysis:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+module.exports.getUserTargetAnalysis = getUserTargetAnalysis;
