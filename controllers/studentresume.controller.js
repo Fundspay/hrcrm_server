@@ -139,7 +139,10 @@ const listResumes = async (req, res) => {
     const records = await model.StudentResume.findAll({
       include: [
         { model: model.CoSheet, attributes: ["id", "collegeName"] },
-        { model: model.User, attributes: ["id"] },
+        { 
+          model: model.User, 
+          attributes: ["id", "firstName", "lastName", "email"] 
+        },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -150,7 +153,9 @@ const listResumes = async (req, res) => {
     return ReE(res, error.message, 500);
   }
 };
+
 module.exports.listResumes = listResumes;
+
 
 
 // ✅ Delete resume by ID
