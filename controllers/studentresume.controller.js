@@ -757,10 +757,19 @@ module.exports.sendMailToStudent = sendMailToStudent;
 const getUserResumesAchieved = async (req, res) => {
   try {
     const { fromDate, toDate, userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: "userId is required" });
 
-    if (!userId) {
-      return res.status(400).json({ success: false, error: "userId is required" });
-    }
+    // ---- Get user full name ----
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+    if (!user) return res.status(404).json({ success: false, error: "User not found" });
+
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
 
     // ---- Date Range Handling ----
     let startDate, endDate;
@@ -774,10 +783,14 @@ const getUserResumesAchieved = async (req, res) => {
       endDate.setHours(23, 59, 59, 999);
     }
 
-    // ---- Fetch all achieved resumes ----
+    // ---- Fetch resumes matching user's name ----
     const resumes = await model.StudentResume.findAll({
       where: {
         userId,
+        [Op.or]: [
+          { followupBy: { [Op.iLike]: fullName } },
+          { followupBy: { [Op.iLike]: firstName } },
+        ],
         resumeDate: { [Op.between]: [startDate, endDate] },
       },
       raw: true,
@@ -806,10 +819,19 @@ module.exports.getUserResumesAchieved = getUserResumesAchieved;
 const getUserInterviewsAchieved = async (req, res) => {
   try {
     const { fromDate, toDate, userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: "userId is required" });
 
-    if (!userId) {
-      return res.status(400).json({ success: false, error: "userId is required" });
-    }
+    // ---- Get user full name ----
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+    if (!user) return res.status(404).json({ success: false, error: "User not found" });
+
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
 
     // ---- Date Range Handling ----
     let startDate, endDate;
@@ -823,10 +845,14 @@ const getUserInterviewsAchieved = async (req, res) => {
       endDate.setHours(23, 59, 59, 999);
     }
 
-    // ---- Fetch all resumes with interviews ----
+    // ---- Fetch interviews matching user's name ----
     const interviews = await model.StudentResume.findAll({
       where: {
         userId,
+        [Op.or]: [
+          { followupBy: { [Op.iLike]: fullName } },
+          { followupBy: { [Op.iLike]: firstName } },
+        ],
         interviewDate: { [Op.ne]: null },
         resumeDate: { [Op.between]: [startDate, endDate] },
       },
@@ -852,6 +878,7 @@ const getUserInterviewsAchieved = async (req, res) => {
 };
 
 module.exports.getUserInterviewsAchieved = getUserInterviewsAchieved;
+
 
 const listResumesByUserIdfuture = async (req, res) => {
   try {
