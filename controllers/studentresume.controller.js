@@ -2,6 +2,8 @@
 const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
 const { Op, fn, col } = require("sequelize");
+const { sendMail } = require("../middleware/mailer.middleware");
+
 
 // Allowed values
 const allowedInternshipTypes = ["fulltime", "parttime", "sip", "liveproject", "wip", "others"];
@@ -625,7 +627,7 @@ module.exports.getUserTargetAnalysis = getUserTargetAnalysis;
 const sendMailToStudent = async (req, res) => {
   try {
     const { id } = req.params; // studentResumeId
-    const { type, customMessage, date, time, link } = req.body;
+    const { type, customMessage, time, link } = req.body;
 
     // Fetch student details
     const student = await model.StudentResume.findByPk(id);
@@ -635,34 +637,43 @@ const sendMailToStudent = async (req, res) => {
       return ReE(res, "No email found for this student", 400);
     }
 
-    // Subject line
-    const subject = "Invitation for Pre-Placement Talk & Interview – FundsAudit";
+    // Use interviewDate from the model
+    const interviewDate = student.interviewDate
+      ? new Date(student.interviewDate).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })
+      : "TBD";
 
-    // Hardcoded template
+    // Subject line
+    const subject = "Pre-Placement Talk & Telephonic Interview – FundsAudit";
+
+    // Student-facing HTML template
     const hardcodedHtml = `
-      <p>Respected ${student.studentName || "Student"},</p>
+      <p>Dear ${student.studentName || "Student"},</p>
 
       <p>As discussed on telephonic conversation,</p>
 
-      <p>This is to inform you that the <b>Pre-Placement Talk</b> of the interested students is scheduled on <b>${date}</b> at <b>${time}</b>.</p>
+      <p>This is to inform you that the <b>Pre-Placement Talk</b> is scheduled on <b>${interviewDate}</b> at <b>${time}</b>.</p>
 
-      <p>As discussed, I’m sharing the link for the Pre-Placement Talk followed by Telephonic Interviews on ${date}.</p>
+      <p>After the Pre-Placement Talk, Telephonic Interviews will be conducted for shortlisted students.</p>
 
-      <p>📅 <b>Meeting Date:</b> ${date}<br/>
+      <p>📅 <b>Meeting Date:</b> ${interviewDate}<br/>
       🕚 <b>Timing:</b> ${time}<br/>
       🔗 <b>Link:</b> <a href="${link}">${link}</a></p>
 
-      <p>Kindly ensure this information is communicated to all shortlisted candidates. Students who attend the Pre-Placement Talk are eligible for the Telephonic Interview round. Make sure that 100% attendance in Pre-Placement Talk.</p>
+      <p>Please ensure your attendance at the Pre-Placement Talk. Only students attending the talk will be eligible for the Telephonic Interview round.</p>
 
-      <p>Looking forward to your support.</p>
+      <p>Looking forward to your participation.</p>
 
       <p>Regards,<br/>
-      HR DEPARTMENT,<br/>
+      HR Department,<br/>
+      FundsAudit<br/>
       +91 7385234536<br/>
       +91 7420861507<br/>
       Pune, Maharashtra<br/>
-      FundsAudit (<a href="https://www.fundsaudit.in/">fundsaudit.in</a>)<br/>
-      <a href="https://www.fundsaudit.in/">https://www.fundsaudit.in</a>
+      <a href="https://www.fundsaudit.in/">https://www.fundsaudit.in/</a>
       </p>
     `;
 
