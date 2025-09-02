@@ -30,6 +30,7 @@ module.exports = (sequelize, Sequelize) => {
             coSheetId: { type: Sequelize.BIGINT, allowNull: true },
             Dateofonboarding: { type: Sequelize.DATE, allowNull: true },
             userId: { type: Sequelize.BIGINT, allowNull: true },
+            mailSentAt: { type: Sequelize.DATE, allowNull: true },
 
             // Status fields
             isActive: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
