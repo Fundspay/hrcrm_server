@@ -31,6 +31,7 @@ module.exports = (sequelize, Sequelize) => {
             Dateofonboarding: { type: Sequelize.DATE, allowNull: true },
             userId: { type: Sequelize.BIGINT, allowNull: true },
             mailSentAt: { type: Sequelize.DATE, allowNull: true },
+            interviewTime: { type: Sequelize.TIME, allowNull: true },
 
             // Status fields
             isActive: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
