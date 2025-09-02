@@ -772,16 +772,13 @@ const getUserResumesAchieved = async (req, res) => {
     const fullName = `${firstName} ${lastName}`.trim();
 
     // ---- Date Range Handling ----
-    let startDate, endDate;
+    let dateFilter = {};
     if (fromDate && toDate) {
-      startDate = new Date(fromDate);
-      endDate = new Date(toDate);
-    } else {
-      startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date();
-      endDate.setHours(23, 59, 59, 999);
+      const startDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      dateFilter = { resumeDate: { [Op.between]: [startDate, endDate] } };
     }
+    // if no fromDate/toDate, leave dateFilter empty to get all records
 
     // ---- Fetch resumes matching user's name ----
     const resumes = await model.StudentResume.findAll({
@@ -791,7 +788,7 @@ const getUserResumesAchieved = async (req, res) => {
           { followupBy: { [Op.iLike]: fullName } },
           { followupBy: { [Op.iLike]: firstName } },
         ],
-        resumeDate: { [Op.between]: [startDate, endDate] },
+        ...dateFilter,
       },
       raw: true,
     });
@@ -806,7 +803,7 @@ const getUserResumesAchieved = async (req, res) => {
       success: true,
       resumesAchieved: resumes.length,
       resumesData: resumes,
-      users, // include user list
+      users,
     });
   } catch (error) {
     console.error("Error in getUserResumesAchieved:", error);
@@ -834,15 +831,11 @@ const getUserInterviewsAchieved = async (req, res) => {
     const fullName = `${firstName} ${lastName}`.trim();
 
     // ---- Date Range Handling ----
-    let startDate, endDate;
+    let dateFilter = {};
     if (fromDate && toDate) {
-      startDate = new Date(fromDate);
-      endDate = new Date(toDate);
-    } else {
-      startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date();
-      endDate.setHours(23, 59, 59, 999);
+      const startDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      dateFilter = { resumeDate: { [Op.between]: [startDate, endDate] } };
     }
 
     // ---- Fetch interviews matching user's name ----
@@ -854,7 +847,7 @@ const getUserInterviewsAchieved = async (req, res) => {
           { followupBy: { [Op.iLike]: firstName } },
         ],
         interviewDate: { [Op.ne]: null },
-        resumeDate: { [Op.between]: [startDate, endDate] },
+        ...dateFilter,
       },
       raw: true,
     });
@@ -869,7 +862,7 @@ const getUserInterviewsAchieved = async (req, res) => {
       success: true,
       interviewsAchieved: interviews.length,
       interviewsData: interviews,
-      users, // include user list
+      users,
     });
   } catch (error) {
     console.error("Error in getUserInterviewsAchieved:", error);
