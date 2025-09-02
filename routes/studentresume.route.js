@@ -14,7 +14,7 @@ router.delete("/delete/:id", studentresumeController.deleteResume);
 router.get("/work-analysis", studentresumeController.getUserTargetAnalysis);
 router.post("/send-mail/:id",studentresumeController.sendMailToStudent);
 
-
+router.get("/list/user/future/:userId", studentresumeController.listResumesByUserIdfuture);
 
 router.get("/resumes-achieved", studentresumeController.getUserResumesAchieved);
 
