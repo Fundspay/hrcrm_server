@@ -25,7 +25,7 @@ const createResume = async (req, res) => {
       }
     }
 
-    // ✅ Prepare payloads (always accept whatever is given)
+    // ✅ Prepare payloads (accept whatever comes in)
     const payloads = dataArray.map(data => ({
       sr: data.sr ?? null,
       resumeDate: data.resumeDate ?? null,
@@ -43,41 +43,38 @@ const createResume = async (req, res) => {
       userId: userId,
     }));
 
-    // ✅ Bulk insert with duplicate skip
+    // ✅ Bulk insert (NO duplicate check, accept everything)
     let records = [];
     try {
       records = await model.StudentResume.bulkCreate(payloads, {
-        ignoreDuplicates: true,
-        returning: true, // PostgreSQL / MySQL 8+ will return inserted rows
+        returning: true,
       });
     } catch (err) {
       console.error("Bulk insert failed:", err.message);
     }
 
-    // ✅ Always return 200 with status summary
-    return ReS(res, {
+    // ✅ Always respond 200, never throw 400/500
+    return res.status(200).json({
       success: true,
       inserted: records.length,
       totalSent: payloads.length,
-      skipped: payloads.length - records.length,
-      data: records, // inserted records only
-    }, 200);
+    });
 
   } catch (error) {
     console.error("StudentResume Create Error:", error);
-    // ✅ Still return success response, never throw 400/500
-    return ReS(res, {
+
+    // ✅ Still return 200 OK
+    return res.status(200).json({
       success: false,
       inserted: 0,
       totalSent: Array.isArray(req.body) ? req.body.length : 1,
-      skipped: Array.isArray(req.body) ? req.body.length : 1,
-      data: [],
-      warning: error.message
-    }, 200);
+      warning: error.message,
+    });
   }
 };
 
 module.exports.createResume = createResume;
+
 
 // ✅ Update Resume Record
 const updateResume = async (req, res) => {
