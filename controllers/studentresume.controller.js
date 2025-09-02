@@ -1,7 +1,7 @@
 "use strict";
 const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
-const { Op, fn, col, literal } = require("sequelize");
+const { Op } = require("sequelize");
 
 // Allowed values
 const allowedInternshipTypes = ["fulltime", "parttime", "sip", "liveproject", "wip", "others"];
@@ -18,21 +18,39 @@ const createResume = async (req, res) => {
         try {
           const userId = data.userId ?? req.user?.id;
           if (!userId) {
-            return { success: false, error: "UserId is required" };
+            return { success: false, error: "userId is required" };
           }
 
           // Find coSheetId for that user
           const coSheet = await model.CoSheet.findOne({ where: { userId } });
           const coSheetId = coSheet ? coSheet.id : null;
 
-          // Validate internshipType
-          if (data.internshipType && !allowedInternshipTypes.includes(data.internshipType.toLowerCase())) {
-            return { success: false, error: `Invalid internshipType. Allowed: ${allowedInternshipTypes.join(", ")}` };
-          }
+          // // Validate internshipType
+          // if (data.internshipType && !allowedInternshipTypes.includes(data.internshipType.toLowerCase())) {
+          //   return { success: false, error: `Invalid internshipType. Allowed: ${allowedInternshipTypes.join(", ")}` };
+          // }
 
-          // Validate course
-          if (data.course && !allowedCourses.includes(data.course.toLowerCase())) {
-            return { success: false, error: `Invalid course. Allowed: ${allowedCourses.join(", ")}` };
+          // // Validate course
+          // if (data.course && !allowedCourses.includes(data.course.toLowerCase())) {
+          //   return { success: false, error: `Invalid course. Allowed: ${allowedCourses.join(", ")}` };
+          // }
+
+          // ✅ Duplicate check (using studentName + mobileNumber + emailId)
+          const duplicate = await model.StudentResume.findOne({
+            where: {
+              userId,
+              studentName: data.studentName ?? null,
+              mobileNumber: data.mobileNumber ?? null,
+              emailId: data.emailId ?? null,
+            },
+          });
+
+          if (duplicate) {
+            return { 
+              success: false, 
+              warning: "Duplicate record found. Skipped insert.", 
+              data: duplicate 
+            };
           }
 
           const payload = {
@@ -47,7 +65,7 @@ const createResume = async (req, res) => {
             emailId: data.emailId ?? null,
             domain: data.domain ?? null,
             interviewDate: data.interviewDate ?? null,
-            Dateofonboarding: data.Dateofonboarding ?? null,
+            dateOfOnboarding: data.dateOfOnboarding ?? null,
             coSheetId,
             userId: userId,
           };
@@ -60,6 +78,12 @@ const createResume = async (req, res) => {
         }
       })
     );
+
+    // If all failed → 400
+    const allFailed = results.every(r => !r.success && !r.warning);
+    if (allFailed) {
+      return ReE(res, "All resume creations failed", 400);
+    }
 
     return ReS(res, { success: true, data: results }, 201);
   } catch (error) {
@@ -79,7 +103,7 @@ const updateResume = async (req, res) => {
     const allowedFields = [
       "sr", "resumeDate", "collegeName", "course", "internshipType",
       "followupBy", "studentName", "mobileNumber", "emailId",
-      "domain", "interviewDate", "UserId", "Dateofonboarding"
+      "domain", "interviewDate", "userId", "dateOfOnboarding"
     ];
 
     for (let f of allowedFields) {
@@ -102,9 +126,10 @@ const updateResume = async (req, res) => {
       }
     }
 
-    // ✅ If userId updated, recalculate coSheetId
-    if (updates.userId) {
-      const coSheet = await model.CoSheet.findOne({ where: { userId: updates.userId } });
+    // ✅ Always ensure coSheetId matches userId (from updates or existing record)
+    const effectiveUserId = updates.userId ?? record.userId;
+    if (effectiveUserId) {
+      const coSheet = await model.CoSheet.findOne({ where: { userId: effectiveUserId } });
       updates.coSheetId = coSheet ? coSheet.id : null;
     }
 
@@ -121,6 +146,7 @@ const updateResume = async (req, res) => {
   }
 };
 module.exports.updateResume = updateResume;
+
 
 // ✅ List all resumes
 const listResumes = async (req, res) => {
@@ -140,30 +166,6 @@ const listResumes = async (req, res) => {
   }
 };
 module.exports.listResumes = listResumes;
-
-
-// ✅ List resumes by UserId
-const listResumesByUserId = async (req, res) => {
-  try {
-    const userId = req.params.userId ?? req.user?.id;
-    if (!userId) return ReE(res, "UserId is required", 400);
-
-    const records = await model.StudentResume.findAll({
-      where: { userId: userId },
-      include: [
-        { model: model.CoSheet, attributes: ["id"] },
-        { model: model.User, attributes: ["id"] },
-      ],
-      order: [["createdAt", "DESC"]],
-    });
-
-    return ReS(res, { success: true, data: records }, 200);
-  } catch (error) {
-    console.error("StudentResume ListByUser Error:", error);
-    return ReE(res, error.message, 500);
-  }
-};
-module.exports.listResumesByUserId = listResumesByUserId;
 
 
 // ✅ Delete resume by ID
@@ -505,3 +507,25 @@ const getRAnalysis = async (req, res) => {
 };
 
 module.exports.getRAnalysis = getRAnalysis;
+
+// ✅ List resumes by userId
+const listResumesByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    const resumes = await model.StudentResume.findAll({
+      where: { userId },
+      order: [["createdAt", "DESC"]],
+    });
+
+    return ReS(res, { success: true, data: resumes }, 200);
+  } catch (error) {
+    console.error("ListResumes Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+module.exports.listResumesByUserId = listResumesByUserId;
+
+
+
