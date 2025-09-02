@@ -840,4 +840,57 @@ const getUserInterviewsAchieved = async (req, res) => {
 
 module.exports.getUserInterviewsAchieved = getUserInterviewsAchieved;
 
+const listResumesByUserIdfuture = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.params.userId;
+    if (!userId) return ReE(res, "userId is required", 400);
 
+    // 🔹 Step 1: Get user full name
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+
+    if (!user) {
+      return ReE(res, "User not found", 404);
+    }
+
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    // 🔹 Step 2: Define tomorrow's date for filtering
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // today's start
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    // 🔹 Step 3: Fetch future StudentResume entries
+    const resumes = await model.StudentResume.findAll({
+      where: {
+        userId,
+        [Op.or]: [
+          { followUpBy: { [Op.iLike]: fullName } },
+          { followUpBy: { [Op.iLike]: firstName } },
+        ],
+        resumeDate: { [Op.gte]: tomorrow }, // only future dates
+      },
+      order: [["resumeDate", "ASC"]],
+      raw: true,
+    });
+
+    return ReS(res, {
+      success: true,
+      userId,
+      followUpBy: fullName,
+      totalRecords: resumes.length,
+      data: resumes,
+    });
+  } catch (error) {
+    console.error("ListResumes Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.listResumesByUserIdfuture = listResumesByUserIdfuture;
