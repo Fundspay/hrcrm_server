@@ -40,7 +40,6 @@ const createResume = async (req, res) => {
       emailId: data.emailId ?? null,
       domain: data.domain ?? null,
       interviewDate: data.interviewDate ?? null,
-      interviewTime: data.interviewTime ?? null,
       dateOfOnboarding: data.dateOfOnboarding ?? null,
       coSheetId: coSheetId,
       userId: userId,
@@ -89,8 +88,7 @@ const updateResume = async (req, res) => {
     const allowedFields = [
       "sr", "resumeDate", "collegeName", "course", "internshipType",
       "followupBy", "studentName", "mobileNumber", "emailId",
-      "domain", "interviewDate", "userId", "dateOfOnboarding",
-      "interviewTime"
+      "domain", "interviewDate", "userId", "dateOfOnboarding"
     ];
 
     for (let f of allowedFields) {
@@ -529,12 +527,27 @@ const listResumesByUserId = async (req, res) => {
       raw: true,
     });
 
+    // 🔹 Step 3: Fetch all users for reference
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
     return ReS(res, {
       success: true,
       userId,
       followUpBy: fullName,
       totalRecords: resumes.length,
       data: resumes,
+      users: userList,
     });
   } catch (error) {
     console.error("ListResumes Error:", error);
