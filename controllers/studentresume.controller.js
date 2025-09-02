@@ -577,7 +577,6 @@ const getUserTargetAnalysis = async (req, res) => {
       startDate = new Date(fromDate);
       endDate = new Date(toDate);
     } else {
-      // Default = today
       startDate = new Date();
       startDate.setHours(0, 0, 0, 0);
       endDate = new Date();
@@ -624,6 +623,8 @@ const getUserTargetAnalysis = async (req, res) => {
           collegesAchieved: new Set(),
           resumesAchieved: 0,
           interviewsAchieved: 0,
+          resumeDates: [],
+          interviewDates: [],
         };
       }
 
@@ -633,8 +634,29 @@ const getUserTargetAnalysis = async (req, res) => {
 
       achieved[followupBy].resumesAchieved += 1;
 
-      if (resume.interviewDate) {
+      // Format dates
+      const formattedResumeDate = resume.resumeDate
+        ? new Date(resume.resumeDate).toLocaleDateString("en-GB", {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
+        : null;
+
+      const formattedInterviewDate = resume.interviewDate
+        ? new Date(resume.interviewDate).toLocaleDateString("en-GB", {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
+        : null;
+
+      if (formattedResumeDate) achieved[followupBy].resumeDates.push(formattedResumeDate);
+      if (formattedInterviewDate) {
         achieved[followupBy].interviewsAchieved += 1;
+        achieved[followupBy].interviewDates.push(formattedInterviewDate);
       }
     });
 
@@ -646,9 +668,10 @@ const getUserTargetAnalysis = async (req, res) => {
       interviewsAchieved: item.interviewsAchieved,
       resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
       resumesAchieved: item.resumesAchieved,
+      resumeDates: item.resumeDates,
+      interviewDates: item.interviewDates,
     }));
 
-    // ---- If no resumes, still return targetData ----
     if (result.length === 0) {
       result = [
         {
@@ -659,6 +682,8 @@ const getUserTargetAnalysis = async (req, res) => {
           interviewsAchieved: 0,
           resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
           resumesAchieved: 0,
+          resumeDates: [],
+          interviewDates: [],
         },
       ];
     }
@@ -671,6 +696,7 @@ const getUserTargetAnalysis = async (req, res) => {
 };
 
 module.exports.getUserTargetAnalysis = getUserTargetAnalysis;
+
 
 
 const sendMailToStudent = async (req, res) => {
