@@ -56,7 +56,7 @@ const createResume = async (req, res) => {
             domain: data.domain ?? null,
             interviewDate: data.interviewDate ?? null,
             dateOfOnboarding: data.dateOfOnboarding ?? null,
-            coSheetId,
+            coSheetId: coSheetId ?? null,
             userId: userId,
           };
 
