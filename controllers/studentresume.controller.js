@@ -730,9 +730,10 @@ const sendMailToStudent = async (req, res) => {
     if (!mailResponse.success) {
       return ReE(res, "Failed to send email to student", 500);
     }
-
+    // Update email sent time and interview time
     await student.update({
       mailSentAt: new Date(),
+      interviewTime: time || student.interviewTime,
     });
 
     return ReS(res, { success: true, message: "Email sent successfully to student" }, 200);
