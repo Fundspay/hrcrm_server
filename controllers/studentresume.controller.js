@@ -587,8 +587,7 @@ const getUserTargetAnalysis = async (req, res) => {
       }
     });
 
-    // ---- Final Response ----
-    const result = Object.values(achieved).map((item) => ({
+    let result = Object.values(achieved).map((item) => ({
       followupBy: item.followupBy,
       collegeTarget: Number(targetData.collegeTarget),
       collegesAchieved: item.collegesAchieved.size,
@@ -598,11 +597,95 @@ const getUserTargetAnalysis = async (req, res) => {
       resumesAchieved: item.resumesAchieved,
     }));
 
+    // ---- If no resumes, still return targetData ----
+    if (result.length === 0) {
+      result = [
+        {
+          followupBy: "N/A",
+          collegeTarget: Number(targetData.collegeTarget),
+          collegesAchieved: 0,
+          interviewsTarget: Number(targetData.interviewsTarget),
+          interviewsAchieved: 0,
+          resumesReceivedTarget: Number(targetData.resumesReceivedTarget),
+          resumesAchieved: 0,
+        },
+      ];
+    }
+
     return res.json({ success: true, data: result });
   } catch (error) {
-    console.error("Error in getUserWorkAnalysis:", error);
+    console.error("Error in getUserTargetAnalysis:", error);
     return res.status(500).json({ success: false, error: error.message });
   }
 };
 
 module.exports.getUserTargetAnalysis = getUserTargetAnalysis;
+
+
+const sendMailToStudent = async (req, res) => {
+  try {
+    const { id } = req.params; // studentResumeId
+    const { type, customMessage, date, time, link } = req.body;
+
+    // Fetch student details
+    const student = await model.StudentResume.findByPk(id);
+    if (!student) return ReE(res, "Student record not found", 404);
+
+    if (!student.emailId) {
+      return ReE(res, "No email found for this student", 400);
+    }
+
+    // Subject line
+    const subject = "Invitation for Pre-Placement Talk & Interview – FundsAudit";
+
+    // Hardcoded template
+    const hardcodedHtml = `
+      <p>Respected ${student.studentName || "Student"},</p>
+
+      <p>As discussed on telephonic conversation,</p>
+
+      <p>This is to inform you that the <b>Pre-Placement Talk</b> of the interested students is scheduled on <b>${date}</b> at <b>${time}</b>.</p>
+
+      <p>As discussed, I’m sharing the link for the Pre-Placement Talk followed by Telephonic Interviews on ${date}.</p>
+
+      <p>📅 <b>Meeting Date:</b> ${date}<br/>
+      🕚 <b>Timing:</b> ${time}<br/>
+      🔗 <b>Link:</b> <a href="${link}">${link}</a></p>
+
+      <p>Kindly ensure this information is communicated to all shortlisted candidates. Students who attend the Pre-Placement Talk are eligible for the Telephonic Interview round. Make sure that 100% attendance in Pre-Placement Talk.</p>
+
+      <p>Looking forward to your support.</p>
+
+      <p>Regards,<br/>
+      HR DEPARTMENT,<br/>
+      +91 7385234536<br/>
+      +91 7420861507<br/>
+      Pune, Maharashtra<br/>
+      FundsAudit (<a href="https://www.fundsaudit.in/">fundsaudit.in</a>)<br/>
+      <a href="https://www.fundsaudit.in/">https://www.fundsaudit.in</a>
+      </p>
+    `;
+
+    // Choose between hardcoded or custom
+    const html = type === "custom" ? customMessage : hardcodedHtml;
+
+    // Send email
+    const mailResponse = await sendMail(student.emailId, subject, html);
+
+    if (!mailResponse.success) {
+      return ReE(res, "Failed to send email to student", 500);
+    }
+
+    await student.update({
+      mailSentAt: new Date(),
+    });
+
+    return ReS(res, { success: true, message: "Email sent successfully to student" }, 200);
+  } catch (error) {
+    console.error("Send Student Mail Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.sendMailToStudent = sendMailToStudent;
+
