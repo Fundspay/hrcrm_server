@@ -40,6 +40,7 @@ var handleTargets = async function (req, res) {
         collegeTarget: 0,
         interviewsTarget: 0,
         resumesReceivedTarget: 0,
+        interviewConductedTarget: 0,   // ✅ NEW FIELD
       });
     }
 
@@ -55,6 +56,7 @@ var handleTargets = async function (req, res) {
           collegeTarget,
           interviewsTarget,
           resumesReceivedTarget,
+          interviewConductedTarget,   // ✅ NEW FIELD
         } = t;
         const targetDate = new Date(date);
 
@@ -70,6 +72,7 @@ var handleTargets = async function (req, res) {
           existing.collegeTarget = collegeTarget ?? existing.collegeTarget;
           existing.interviewsTarget = interviewsTarget ?? existing.interviewsTarget;
           existing.resumesReceivedTarget = resumesReceivedTarget ?? existing.resumesReceivedTarget;
+          existing.interviewConductedTarget = interviewConductedTarget ?? existing.interviewConductedTarget; // ✅
           await existing.save();
         } else {
           await model.MyTarget.create({
@@ -82,6 +85,7 @@ var handleTargets = async function (req, res) {
             collegeTarget: collegeTarget || 0,
             interviewsTarget: interviewsTarget || 0,
             resumesReceivedTarget: resumesReceivedTarget || 0,
+            interviewConductedTarget: interviewConductedTarget || 0, // ✅
           });
         }
       }
@@ -109,6 +113,7 @@ var handleTargets = async function (req, res) {
         collegeTarget: found ? found.collegeTarget : d.collegeTarget,
         interviewsTarget: found ? found.interviewsTarget : d.interviewsTarget,
         resumesReceivedTarget: found ? found.resumesReceivedTarget : d.resumesReceivedTarget,
+        interviewConductedTarget: found ? found.interviewConductedTarget : d.interviewConductedTarget, // ✅
       };
     });
 
@@ -121,17 +126,10 @@ var handleTargets = async function (req, res) {
       collegeTarget: merged.reduce((sum, t) => sum + t.collegeTarget, 0),
       interviewsTarget: merged.reduce((sum, t) => sum + t.interviewsTarget, 0),
       resumesReceivedTarget: merged.reduce((sum, t) => sum + t.resumesReceivedTarget, 0),
+      interviewConductedTarget: merged.reduce((sum, t) => sum + t.interviewConductedTarget, 0), // ✅
     };
 
-    return ReS(
-      res,
-      {
-        success: true,
-        dates: merged,
-        totals,
-      },
-      200
-    );
+    return ReS(res, { success: true, dates: merged, totals }, 200);
   } catch (error) {
     return ReE(res, error.message, 500);
   }
@@ -139,7 +137,6 @@ var handleTargets = async function (req, res) {
 
 module.exports.handleTargets = handleTargets;
 
-// GET fetch targets for frontend
 var fetchTargets = async function (req, res) {
   try {
     let { userId, startDate, endDate, month } = req.query;
@@ -163,12 +160,12 @@ var fetchTargets = async function (req, res) {
       eDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     }
 
-    // Generate date list (local YYYY-MM-DD + correct weekday)
+    // Generate date list
     const dateList = [];
     for (let d = new Date(sDate); d <= eDate; d.setDate(d.getDate() + 1)) {
-      const current = new Date(d); // clone to avoid mutation issues
+      const current = new Date(d);
       dateList.push({
-        date: current.toLocaleDateString("en-CA"), // YYYY-MM-DD in local tz
+        date: current.toLocaleDateString("en-CA"),
         day: current.toLocaleDateString("en-US", { weekday: "long" }),
         jds: 0,
         calls: 0,
@@ -177,6 +174,7 @@ var fetchTargets = async function (req, res) {
         collegeTarget: 0,
         interviewsTarget: 0,
         resumesReceivedTarget: 0,
+        interviewConductedTarget: 0, // ✅ NEW FIELD
       });
     }
 
@@ -192,7 +190,7 @@ var fetchTargets = async function (req, res) {
     const merged = dateList.map((d) => {
       const found = existingTargets.find((t) => {
         const tDate = new Date(t.targetDate);
-        const tDateStr = tDate.toLocaleDateString("en-CA"); // match local YYYY-MM-DD
+        const tDateStr = tDate.toLocaleDateString("en-CA");
         return tDateStr === d.date;
       });
       return {
@@ -204,6 +202,7 @@ var fetchTargets = async function (req, res) {
         collegeTarget: found ? found.collegeTarget : d.collegeTarget,
         interviewsTarget: found ? found.interviewsTarget : d.interviewsTarget,
         resumesReceivedTarget: found ? found.resumesReceivedTarget : d.resumesReceivedTarget,
+        interviewConductedTarget: found ? found.interviewConductedTarget : d.interviewConductedTarget, // ✅
       };
     });
 
@@ -216,17 +215,10 @@ var fetchTargets = async function (req, res) {
       collegeTarget: merged.reduce((sum, t) => sum + t.collegeTarget, 0),
       interviewsTarget: merged.reduce((sum, t) => sum + t.interviewsTarget, 0),
       resumesReceivedTarget: merged.reduce((sum, t) => sum + t.resumesReceivedTarget, 0),
+      interviewConductedTarget: merged.reduce((sum, t) => sum + t.interviewConductedTarget, 0), // ✅
     };
 
-    return ReS(
-      res,
-      {
-        success: true,
-        dates: merged,
-        totals,
-      },
-      200
-    );
+    return ReS(res, { success: true, dates: merged, totals }, 200);
   } catch (error) {
     return ReE(res, error.message, 500);
   }
