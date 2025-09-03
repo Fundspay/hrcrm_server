@@ -11,7 +11,6 @@ const resumedetailsRouter =require("./resumedetails.route")
 const mytargetRouter = require("./mytarget.route");
 const interviewRouter = require("./interview.route");
 const studentresumeRouter = require("./studentresume.route");
-const interviewanalysisRouter = require("./interviewanalysis.route");
 const analysis = require("./analysis.route");
 
 // Health Check Route
@@ -29,7 +28,6 @@ router.use("/resumedetails", resumedetailsRouter);
 router.use("/mytarget", mytargetRouter);
 router.use("/interview", interviewRouter);
 router.use("/studentresume", studentresumeRouter);
-router.use("/interviewanalysis", interviewanalysisRouter);
 router.use("/analysis", analysis);
 
 module.exports = router;
