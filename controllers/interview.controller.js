@@ -541,6 +541,109 @@ const getDailyInterviewStats = async (req, res) => {
 
 module.exports.getDailyInterviewStats = getDailyInterviewStats;
 
+const getInterviewsByStatus = async (req, res, statusFilter) => {
+  try {
+    const userId = req.query.userId || req.params.userId;
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // ✅ Get user full name
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+
+    if (!user) return ReE(res, "User not found", 404);
+
+    const firstName = user.firstName?.trim() || "";
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    // ✅ Build where condition
+    const whereClause = {
+      userId,
+      [Op.or]: [
+        { interviewedBy: { [Op.iLike]: fullName } },
+        { interviewedBy: { [Op.iLike]: firstName } },
+      ],
+    };
+
+    if (statusFilter === "conducted") {
+      // conducted = anything with non-null finalSelectionStatus
+      whereClause.finalSelectionStatus = { [Op.ne]: null };
+    } else {
+      whereClause.finalSelectionStatus = { [Op.iLike]: statusFilter };
+    }
+
+    // ✅ Fetch interviews
+    const interviews = await model.StudentResume.findAll({
+      where: whereClause,
+      order: [["interviewDate", "ASC"]],
+      raw: true,
+    });
+
+    // ✅ Fetch all users
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
+    return ReS(res, {
+      success: true,
+      userId,
+      interviewedBy: fullName,
+      totalRecords: interviews.length,
+      data: interviews,
+      users: userList,
+    });
+
+  } catch (error) {
+    console.error("getInterviewsByStatus Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+// ✅ All conducted interviews
+const listConductedInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "conducted");
+module.exports.listConductedInterviews = listConductedInterviews;
+
+// ✅ Selected interviews
+const listSelectedInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "selected");
+module.exports.listSelectedInterviews = listSelectedInterviews;
+
+// ✅ On Hold interviews
+const listOnHoldInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "on hold");
+module.exports.listOnHoldInterviews = listOnHoldInterviews;
+
+// ✅ Not Answered / Busy
+const listNotAnsweredInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "not answered / busy");
+module.exports.listNotAnsweredInterviews = listNotAnsweredInterviews;
+
+// ✅ Not Selected
+const listNotSelectedInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "not selected");
+module.exports.listNotSelectedInterviews = listNotSelectedInterviews;
+
+// ✅ Not Interested
+const listNotInterestedInterviews = (req, res) => 
+  getInterviewsByStatus(req, res, "not interested");
+module.exports.listNotInterestedInterviews = listNotInterestedInterviews;
+
+
+
+
 
 
 
