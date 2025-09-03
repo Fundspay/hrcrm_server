@@ -169,9 +169,23 @@ const getInterviewSummary = async (req, res) => {
     const totalTarget = targetData[0]?.totalTarget || 0;
 
     if (!records.length) {
+      // 🔹 Return default row with zeros
+      const defaultRow = {
+        SR: 1,
+        "INTERVIEWER'S NAME": "-",
+        "INTERVIEW CONDUCTED TARGET": totalTarget,
+        "TOTAL INTERVIEWS CONDUCTED": 0,
+        SELECTED: 0,
+        "ON HOLD": 0,
+        "NOT ANSWERED/BUSY": 0,
+        "NOT SELECTED": 0,
+        "NOT INTERESTED": 0,
+        "DATE OF INTERVIEW": "",
+      };
+
       return ReS(res, {
         success: true,
-        data: [],
+        data: [defaultRow],
         totals: {
           target: totalTarget,
           conducted: 0,
@@ -201,7 +215,6 @@ const getInterviewSummary = async (req, res) => {
         };
       }
 
-      // ✅ Count only conducted interviews
       if (rec.finalSelectionStatus) {
         summary[interviewer].conducted++;
         const status = rec.finalSelectionStatus.toLowerCase();
@@ -213,7 +226,6 @@ const getInterviewSummary = async (req, res) => {
         else if (status === "not interested") summary[interviewer].notInterested++;
       }
 
-      // ✅ Group by date
       if (rec.interviewDate) {
         const d = new Date(rec.interviewDate);
         const formattedDate = d.toLocaleDateString("en-GB", {
@@ -242,7 +254,6 @@ const getInterviewSummary = async (req, res) => {
         .join("\n")
     }));
 
-    // ✅ Totals (overall target vs actual conducted)
     const totalConducted = data.reduce((sum, d) => sum + d["TOTAL INTERVIEWS CONDUCTED"], 0);
 
     return ReS(res, {
@@ -262,6 +273,7 @@ const getInterviewSummary = async (req, res) => {
 };
 
 module.exports.getInterviewSummary = getInterviewSummary;
+
 
 const getCollegeInterviewAnalysis = async (req, res) => {
   try {
