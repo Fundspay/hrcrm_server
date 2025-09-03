@@ -66,7 +66,8 @@ const updateInterviewScore = async (req, res) => {
       "skillsScore",
       "otherScore",
       "comment",
-      "finalSelectionStatus"
+      "finalSelectionStatus",
+      "userId"
     ];
 
     const allowedStatuses = [
