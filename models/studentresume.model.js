@@ -25,13 +25,23 @@ module.exports = (sequelize, Sequelize) => {
 
             // Interview details
             interviewDate: { type: Sequelize.DATE, allowNull: true },
+            interviewTime: { type: Sequelize.TIME, allowNull: true },
+
+            // New: Interview Score Card fields
+            interviewedBy: { type: Sequelize.STRING, allowNull: true },
+            knowledgeScore: { type: Sequelize.INTEGER, allowNull: true },   // Out of 10
+            approachScore: { type: Sequelize.INTEGER, allowNull: true },   // Out of 10
+            skillsScore: { type: Sequelize.INTEGER, allowNull: true },     // Out of 10
+            otherScore: { type: Sequelize.INTEGER, allowNull: true },      // Out of 10
+            totalAverageScore: { type: Sequelize.FLOAT, allowNull: true }, // Calculated average
+            finalSelectionStatus: { type: Sequelize.STRING, allowNull: true }, // e.g. "Selected", "Hold", "Not Selected"
+            comment: { type: Sequelize.TEXT, allowNull: true },
 
             // Foreign key (optional) → Link to CoSheet if needed
             coSheetId: { type: Sequelize.BIGINT, allowNull: true },
             Dateofonboarding: { type: Sequelize.DATE, allowNull: true },
             userId: { type: Sequelize.BIGINT, allowNull: true },
             mailSentAt: { type: Sequelize.DATE, allowNull: true },
-            interviewTime: { type: Sequelize.TIME, allowNull: true },
 
             // Status fields
             isActive: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
@@ -42,7 +52,6 @@ module.exports = (sequelize, Sequelize) => {
     );
 
     StudentResume.associate = function (models) {
-     
         StudentResume.belongsTo(models.CoSheet, {
             foreignKey: "coSheetId",
             onDelete: "SET NULL",
@@ -55,7 +64,6 @@ module.exports = (sequelize, Sequelize) => {
             onDelete: "SET NULL",
             onUpdate: "CASCADE",
             constraints: true,
-        
         });
     };
 
