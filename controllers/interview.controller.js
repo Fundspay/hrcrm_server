@@ -232,7 +232,6 @@ const getInterviewSummary = async (req, res) => {
 
 module.exports.getInterviewSummary = getInterviewSummary;
 
-const { Op } = require("sequelize");
 
 const getCollegeInterviewAnalysis = async (req, res) => {
   try {
