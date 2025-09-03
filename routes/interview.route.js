@@ -11,5 +11,6 @@ router.get("/list", interviewController.listInterview);
 router.get("/interviewsummary/:userId", interviewController.getInterviewSummary);
 router.get("/collegeanalysis/:userId", interviewController.getCollegeInterviewAnalysis);
 router.get("/interviews/:userId", interviewController.listInterviewsByUserId);
+router.get("/dailyinterviewstats/:userId", interviewController.getDailyInterviewStats);
 
 module.exports = router;
