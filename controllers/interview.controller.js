@@ -445,6 +445,79 @@ const listInterviewsByUserId = async (req, res) => {
 
 module.exports.listInterviewsByUserId = listInterviewsByUserId;
 
+const getDailyInterviewStats = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // Default = today
+    let startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+
+    let endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // Fetch interviews for user in date range
+    const records = await model.StudentResume.findAll({
+      attributes: ["interviewDate", "finalSelectionStatus"],
+      where: {
+        userId: userId,
+        interviewDate: { [Op.between]: [startDate, endDate] },
+        interviewedBy: { [Op.ne]: null },
+      },
+      raw: true,
+    });
+
+    if (!records.length) {
+      return ReS(res, { success: true, data: [] }, 200);
+    }
+
+    // Group per day
+    const stats = {};
+    for (const rec of records) {
+      if (!rec.interviewDate) continue;
+
+      const d = new Date(rec.interviewDate);
+      const dayKey = d.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+      if (!stats[dayKey]) {
+        stats[dayKey] = { date: dayKey, totalConducted: 0, totalSelected: 0 };
+      }
+
+      // Count conducted
+      if (rec.finalSelectionStatus) {
+        stats[dayKey].totalConducted++;
+      }
+
+      // Count selected
+      if (rec.finalSelectionStatus && rec.finalSelectionStatus.toLowerCase() === "selected") {
+        stats[dayKey].totalSelected++;
+      }
+    }
+
+    // Convert to array sorted by date
+    const data = Object.values(stats).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    return ReS(res, { success: true, data }, 200);
+  } catch (error) {
+    console.error("Daily Interview Stats Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getDailyInterviewStats = getDailyInterviewStats;
+
+
 
 
 
