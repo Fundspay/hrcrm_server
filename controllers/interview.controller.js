@@ -2,21 +2,56 @@
 
 const model = require("../models/index");
 const { ReE, ReS } = require("../utils/util.service.js");
+const { Op } = require("sequelize");
 
 
 
-const listResumeFields = (req, res) => {
+
+const listInterview = async (req, res) => {
   try {
+    // ✅ Get all fields from the model
     const fields = Object.keys(model.StudentResume.rawAttributes);
 
-    return ReS(res, { success: true, fields }, 200);
+    // ✅ Fetch all resume data with CoSheet relation
+    const records = await model.StudentResume.findAll({
+      attributes: fields, // only these fields
+      include: [
+        { model: model.CoSheet, attributes: ["id", "collegeName"] }
+      ],
+      order: [["createdAt", "DESC"]],
+      raw: false
+    });
+
+    // ✅ Fetch all users separately
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
+    return ReS(res, {
+      success: true,
+      totalFields: fields.length,
+      fields,
+      totalRecords: records.length,
+      data: records,
+      users: userList,
+    }, 200);
   } catch (error) {
     console.error("List Resume Fields Error:", error);
     return ReE(res, error.message, 500);
   }
 };
 
-module.exports.listResumeFields = listResumeFields;
+module.exports.listInterview = listInterview;
+
 
 const updateInterviewScore = async (req, res) => {
   try {
@@ -84,5 +119,304 @@ const updateInterviewScore = async (req, res) => {
 };
 
 module.exports.updateInterviewScore = updateInterviewScore;
+
+const getInterviewSummary = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // Default = today’s start & end
+    let startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+
+    let endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    const records = await model.StudentResume.findAll({
+      attributes: ["interviewedBy", "interviewDate", "finalSelectionStatus"],
+      where: {
+        userId: userId,
+        interviewDate: {
+          [Op.between]: [startDate, endDate]
+        },
+        interviewedBy: { [Op.ne]: null }
+      },
+      raw: true,
+    });
+
+    if (!records.length) {
+      return ReS(res, { success: true, data: [] }, 200);
+    }
+
+    // Group by interviewer
+    const summary = {};
+    let srCounter = 1;
+
+    for (const rec of records) {
+      const interviewer = rec.interviewedBy.trim().toLowerCase();
+      if (!summary[interviewer]) {
+        summary[interviewer] = {
+          sr: srCounter++,
+          interviewerName: rec.interviewedBy,
+          totalAllotted: 0,
+          totalConducted: 0,
+          selected: 0,
+          onHold: 0,
+          notAnsweredBusy: 0,
+          notSelected: 0,
+          notInterested: 0,
+          dateWise: {}
+        };
+      }
+
+      // Every row = allotted
+      summary[interviewer].totalAllotted++;
+
+      if (rec.finalSelectionStatus) {
+        summary[interviewer].totalConducted++;
+        const status = rec.finalSelectionStatus.toLowerCase();
+
+        if (status === "selected") summary[interviewer].selected++;
+        else if (status === "on hold") summary[interviewer].onHold++;
+        else if (status === "not answered / busy") summary[interviewer].notAnsweredBusy++;
+        else if (status === "not selected") summary[interviewer].notSelected++;
+        else if (status === "not interested") summary[interviewer].notInterested++;
+      }
+
+      // Group by date
+      if (rec.interviewDate) {
+        const d = new Date(rec.interviewDate);
+        const formattedDate = d.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric"
+        });
+        summary[interviewer].dateWise[formattedDate] =
+          (summary[interviewer].dateWise[formattedDate] || 0) + 1;
+      }
+    }
+
+    // Format response
+    const data = Object.values(summary).map((s) => ({
+      SR: s.sr,
+      "INTERVIEWER'S NAME": s.interviewerName,
+      "TOTAL INTERVIEWS ALLOTTED": s.totalAllotted,
+      "TOTAL INTERVIEWS CONDUCTED": s.totalConducted,
+      SELECTED: s.selected,
+      "ON HOLD": s.onHold,
+      "NOT ANSWERED/BUSY": s.notAnsweredBusy,
+      "NOT SELECTED": s.notSelected,
+      "NOT INTERESTED": s.notInterested,
+      "DATE OF INTERVIEW": Object.entries(s.dateWise)
+        .map(([date, count], idx) => `${idx + 1}. ${date} (${count})`)
+        .join("\n")
+    }));
+
+    return ReS(res, { success: true, data }, 200);
+
+  } catch (error) {
+    console.error("Interview Summary Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getInterviewSummary = getInterviewSummary;
+
+const { Op } = require("sequelize");
+
+const getCollegeInterviewAnalysis = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // Default = today
+    let startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+
+    let endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    if (fromDate && toDate) {
+      startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    const records = await model.StudentResume.findAll({
+      attributes: ["collegeName", "interviewDate", "finalSelectionStatus"],
+      where: {
+        userId: userId,
+        interviewDate: { [Op.between]: [startDate, endDate] },
+        collegeName: { [Op.ne]: null }
+      },
+      raw: true,
+    });
+
+    if (!records.length) {
+      return ReS(res, { success: true, data: [] }, 200);
+    }
+
+    // Group by collegeName
+    const summary = {};
+    let srCounter = 1;
+
+    for (const rec of records) {
+      const college = rec.collegeName.trim().toLowerCase();
+      if (!summary[college]) {
+        summary[college] = {
+          sr: srCounter++,
+          collegeName: rec.collegeName,
+          totalAllotted: 0,
+          totalConducted: 0,
+          selected: 0,
+          onHold: 0,
+          notAnsweredBusy: 0,
+          notSelected: 0,
+          notInterested: 0,
+          dateWise: {}
+        };
+      }
+
+      // Every row = allotted
+      summary[college].totalAllotted++;
+
+      if (rec.finalSelectionStatus) {
+        summary[college].totalConducted++;
+        const status = rec.finalSelectionStatus.toLowerCase();
+
+        if (status === "selected") summary[college].selected++;
+        else if (status === "on hold") summary[college].onHold++;
+        else if (status === "not answered / busy") summary[college].notAnsweredBusy++;
+        else if (status === "not selected") summary[college].notSelected++;
+        else if (status === "not interested") summary[college].notInterested++;
+      }
+
+      // Group by date
+      if (rec.interviewDate) {
+        const d = new Date(rec.interviewDate);
+        const formattedDate = d.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric"
+        });
+        summary[college].dateWise[formattedDate] =
+          (summary[college].dateWise[formattedDate] || 0) + 1;
+      }
+    }
+
+    // Format output
+    const data = Object.values(summary).map((s) => {
+      const selectionPercent =
+        s.totalConducted > 0
+          ? ((s.selected / s.totalConducted) * 100).toFixed(2) + "%"
+          : "0%";
+
+      return {
+        SR: s.sr,
+        "COLLEGE NAME": s.collegeName,
+        "TOTAL INTERVIEWS ALLOTTED": s.totalAllotted,
+        "TOTAL INTERVIEWS CONDUCTED": s.totalConducted,
+        SELECTED: s.selected,
+        "ON HOLD": s.onHold,
+        "NOT ANSWERED/BUSY": s.notAnsweredBusy,
+        "NOT SELECTED": s.notSelected,
+        "NOT INTERESTED": s.notInterested,
+        "SELECTION %": selectionPercent,
+        "DATE OF INTERVIEW": Object.entries(s.dateWise)
+          .map(([date, count], idx) => `${idx + 1}. ${date} (${count})`)
+          .join("\n")
+      };
+    });
+
+    return ReS(res, { success: true, data }, 200);
+
+  } catch (error) {
+    console.error("College Interview Analysis Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.getCollegeInterviewAnalysis = getCollegeInterviewAnalysis;
+
+// ✅ List interviews by userId with user info and total count
+const listInterviewsByUserId = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.params.userId;
+    if (!userId) return ReE(res, "userId is required", 400);
+
+    // 🔹 Step 1: Get user full name
+    const user = await model.User.findOne({
+      where: { id: userId },
+      attributes: ["firstName", "lastName"],
+      raw: true,
+    });
+
+    if (!user) {
+      return ReE(res, "User not found", 404);
+    }
+
+    const firstName = user.firstName?.trim() || "";
+    const lastName = user.lastName ? user.lastName.trim() : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    // 🔹 Step 2: Fetch StudentResume entries where interviewedBy matches fullName or firstName (case-insensitive)
+    const interviews = await model.StudentResume.findAll({
+      where: {
+        userId,
+        [Op.or]: [
+          { interviewedBy: { [Op.iLike]: fullName } },
+          { interviewedBy: { [Op.iLike]: firstName } },
+        ],
+      },
+      order: [["interviewDate", "ASC"]],
+      raw: true,
+    });
+
+    // 🔹 Step 3: Fetch all users for reference
+    const users = await model.User.findAll({
+      attributes: ["id", "firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const userList = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName?.trim() || ""} ${u.lastName?.trim() || ""}`.trim(),
+      email: u.email,
+    }));
+
+    return ReS(res, {
+      success: true,
+      userId,
+      interviewedBy: fullName,
+      totalRecords: interviews.length,
+      data: interviews,
+      users: userList,
+    });
+  } catch (error) {
+    console.error("ListInterviews Error:", error);
+    return ReE(res, error.message, 500);
+  }
+};
+
+module.exports.listInterviewsByUserId = listInterviewsByUserId;
+
+
+
 
 
