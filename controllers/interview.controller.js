@@ -83,7 +83,11 @@ const updateInterviewScore = async (req, res) => {
         if (f === "finalSelectionStatus") {
           const val = req.body[f]?.toLowerCase();
           if (val && !allowedStatuses.includes(val)) {
-            return ReE(res, `Invalid finalSelectionStatus. Allowed: ${allowedStatuses.join(", ")}`, 400);
+            return ReE(
+              res,
+              `Invalid finalSelectionStatus. Allowed: ${allowedStatuses.join(", ")}`,
+              400
+            );
           }
           updates[f] = val;
         } else {
@@ -92,7 +96,15 @@ const updateInterviewScore = async (req, res) => {
       }
     }
 
-    // ✅ Auto-calculate totalAverageScore if scores are provided
+    // ✅ Ensure userId exists in Users table
+    if (updates.userId) {
+      const userExists = await model.User.findByPk(updates.userId);
+      if (!userExists) {
+        return ReE(res, "Invalid userId — user does not exist", 400);
+      }
+    }
+
+    // ✅ Auto-calculate totalAverageScore
     const scores = [
       updates.knowledgeScore ?? record.knowledgeScore,
       updates.approachScore ?? record.approachScore,
