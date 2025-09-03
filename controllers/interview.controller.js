@@ -128,7 +128,7 @@ const getInterviewSummary = async (req, res) => {
 
     if (!userId) return ReE(res, "userId is required", 400);
 
-    // Default = today’s start & end
+    // ✅ Default = today
     let startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
 
@@ -143,34 +143,55 @@ const getInterviewSummary = async (req, res) => {
       endDate.setHours(23, 59, 59, 999);
     }
 
+    // ✅ Fetch interview records
     const records = await model.StudentResume.findAll({
       attributes: ["interviewedBy", "interviewDate", "finalSelectionStatus"],
       where: {
-        userId: userId,
-        interviewDate: {
-          [Op.between]: [startDate, endDate]
-        },
+        userId,
+        interviewDate: { [Op.between]: [startDate, endDate] },
         interviewedBy: { [Op.ne]: null }
       },
       raw: true,
     });
 
+    // ✅ Fetch interview conducted target (sum for this user in range)
+    const targetData = await model.MyTarget.findAll({
+      attributes: [
+        [model.sequelize.fn("SUM", model.sequelize.col("interviewConductedTarget")), "totalTarget"]
+      ],
+      where: {
+        userId,
+        targetDate: { [Op.between]: [startDate, endDate] }
+      },
+      raw: true,
+    });
+
+    const totalTarget = targetData[0]?.totalTarget || 0;
+
     if (!records.length) {
-      return ReS(res, { success: true, data: [] }, 200);
+      return ReS(res, {
+        success: true,
+        data: [],
+        totals: {
+          target: totalTarget,
+          conducted: 0,
+          achievement: totalTarget > 0 ? "0%" : "N/A"
+        }
+      }, 200);
     }
 
-    // Group by interviewer
+    // ✅ Group by interviewer
     const summary = {};
     let srCounter = 1;
 
     for (const rec of records) {
       const interviewer = rec.interviewedBy.trim().toLowerCase();
+
       if (!summary[interviewer]) {
         summary[interviewer] = {
           sr: srCounter++,
           interviewerName: rec.interviewedBy,
-          totalAllotted: 0,
-          totalConducted: 0,
+          conducted: 0,
           selected: 0,
           onHold: 0,
           notAnsweredBusy: 0,
@@ -180,11 +201,9 @@ const getInterviewSummary = async (req, res) => {
         };
       }
 
-      // Every row = allotted
-      summary[interviewer].totalAllotted++;
-
+      // ✅ Count only conducted interviews
       if (rec.finalSelectionStatus) {
-        summary[interviewer].totalConducted++;
+        summary[interviewer].conducted++;
         const status = rec.finalSelectionStatus.toLowerCase();
 
         if (status === "selected") summary[interviewer].selected++;
@@ -194,7 +213,7 @@ const getInterviewSummary = async (req, res) => {
         else if (status === "not interested") summary[interviewer].notInterested++;
       }
 
-      // Group by date
+      // ✅ Group by date
       if (rec.interviewDate) {
         const d = new Date(rec.interviewDate);
         const formattedDate = d.toLocaleDateString("en-GB", {
@@ -207,12 +226,12 @@ const getInterviewSummary = async (req, res) => {
       }
     }
 
-    // Format response
+    // ✅ Prepare response
     const data = Object.values(summary).map((s) => ({
       SR: s.sr,
       "INTERVIEWER'S NAME": s.interviewerName,
-      "TOTAL INTERVIEWS ALLOTTED": s.totalAllotted,
-      "TOTAL INTERVIEWS CONDUCTED": s.totalConducted,
+      "INTERVIEW CONDUCTED TARGET": totalTarget, // same global target for all rows
+      "TOTAL INTERVIEWS CONDUCTED": s.conducted,
       SELECTED: s.selected,
       "ON HOLD": s.onHold,
       "NOT ANSWERED/BUSY": s.notAnsweredBusy,
@@ -223,7 +242,18 @@ const getInterviewSummary = async (req, res) => {
         .join("\n")
     }));
 
-    return ReS(res, { success: true, data }, 200);
+    // ✅ Totals (overall target vs actual conducted)
+    const totalConducted = data.reduce((sum, d) => sum + d["TOTAL INTERVIEWS CONDUCTED"], 0);
+
+    return ReS(res, {
+      success: true,
+      data,
+      totals: {
+        target: totalTarget,
+        conducted: totalConducted,
+        achievement: totalTarget > 0 ? ((totalConducted / totalTarget) * 100).toFixed(2) + "%" : "N/A"
+      }
+    }, 200);
 
   } catch (error) {
     console.error("Interview Summary Error:", error);
@@ -232,7 +262,6 @@ const getInterviewSummary = async (req, res) => {
 };
 
 module.exports.getInterviewSummary = getInterviewSummary;
-
 
 const getCollegeInterviewAnalysis = async (req, res) => {
   try {
